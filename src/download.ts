@@ -16,7 +16,9 @@ export async function downloadMedia(
   } = {}
 ): Promise<DownloadResult> {
   const ytDlpPath =
-    opts.ytDlpPath ?? process.env.YT_DLP_PATH ?? path.join(process.cwd(), "bin/yt-dlp");
+    opts.ytDlpPath ||
+    process.env.YT_DLP_PATH ||
+    path.join(process.cwd(), "bin/yt-dlp");
   const outDir = opts.outDir ?? "/tmp";
   const exec = opts.exec ?? execFileAsync;
 
