@@ -6,7 +6,14 @@ import type { Client } from "@notionhq/client";
 import type Anthropic from "@anthropic-ai/sdk";
 import ffmpegStaticPath from "ffmpeg-static";
 import type { PipelineResult, RelatedNote } from "./types.js";
-import { buildPageProperties, createNotionPage, markdownToBlocks } from "./notion.js";
+import {
+  buildPageProperties,
+  createNotionPage,
+  markdownToBlocks,
+  buildSummaryCallout,
+  buildTranscriptToggle,
+  buildDivider,
+} from "./notion.js";
 import { downloadMedia as downloadMediaFn, fetchMetadata as fetchMetadataFn } from "./download.js";
 import { extractAndTranscribe as extractAndTranscribeFn } from "./transcribe.js";
 import { extractFrames as extractFramesFn } from "./vision.js";
@@ -43,35 +50,42 @@ function truncateTitle(title: string): string {
 }
 
 /**
- * Composes the full page body as a constrained markdown document (headings,
- * label lines, plain paragraphs, numbered/bulleted lists) that
- * markdownToBlocks() converts into proper Notion blocks. Order: a quick-
- * reference list of named items (if any), the category-specific content
- * notes, related past notes, then Source/metadata and the raw transcript
- * at the very end.
+ * Composes the full page as real Notion blocks, in a deliberate visual
+ * hierarchy rather than one flat list of headings:
+ *
+ *   1. A colored callout with a one-glance summary (if available)
+ *   2. Mentioned Tools & Resources (if any) + the category-specific content
+ *      notes + Source/metadata — as headed markdown sections
+ *   3. The raw transcript, collapsed into a toggle (it's the longest,
+ *      least-scannable part of the page)
+ *   4. Related Notes, last — cross-links are a "see also," not the point
+ *      of the page
  */
-function buildBodyMarkdown(result: PipelineResult): string {
-  const sections: string[] = [];
+function buildPageBlocks(result: PipelineResult): object[] {
+  const blocks: object[] = [];
+
+  if (result.summary) {
+    blocks.push(buildSummaryCallout(result.summary));
+    blocks.push(buildDivider());
+  }
+
+  const middleSections: string[] = [];
 
   if (result.keyItems && result.keyItems.length > 0) {
-    sections.push(`## Mentioned Tools & Resources\n${result.keyItems.map((i) => `- ${i}`).join("\n")}`);
-  }
-
-  if (result.contentNotes) {
-    sections.push(`## ${result.contentNotesHeading ?? "Notes"}\n${result.contentNotes}`);
-  }
-
-  if (result.relatedNotes && result.relatedNotes.length > 0) {
-    sections.push(
-      `## Related Notes\n${result.relatedNotes.map((n) => `- ${n.title}: ${n.url}`).join("\n")}`
+    middleSections.push(
+      `## Mentioned Tools & Resources\n${result.keyItems.map((i) => `- ${i}`).join("\n")}`
     );
   }
 
-  if (result.errorMessage) {
-    sections.push(`## Error\n${result.errorMessage}`);
+  if (result.contentNotes) {
+    middleSections.push(`## ${result.contentNotesHeading ?? "Notes"}\n${result.contentNotes}`);
   }
 
-  sections.push(
+  if (result.errorMessage) {
+    middleSections.push(`## Error\n${result.errorMessage}`);
+  }
+
+  middleSections.push(
     [
       "## Source",
       `URL: ${result.sourceUrl}`,
@@ -83,9 +97,19 @@ function buildBodyMarkdown(result: PipelineResult): string {
       .join("\n")
   );
 
-  sections.push(`## Raw Transcript\n${result.transcript ?? "No transcript available."}`);
+  blocks.push(...markdownToBlocks(middleSections.join("\n\n")));
+  blocks.push(buildTranscriptToggle(result.transcript ?? "No transcript available."));
 
-  return sections.join("\n\n");
+  if (result.relatedNotes && result.relatedNotes.length > 0) {
+    blocks.push(buildDivider());
+    blocks.push(
+      ...markdownToBlocks(
+        `## Related Notes\n${result.relatedNotes.map((n) => `- ${n.title}: ${n.url}`).join("\n")}`
+      )
+    );
+  }
+
+  return blocks;
 }
 
 export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promise<PipelineResult> {
@@ -237,6 +261,7 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
           status: "Done",
           sourceUrl,
           title: analysis.title.trim(),
+          summary: analysis.summary,
           reelDescription,
           uploader,
           externalSourceUrl,
@@ -280,7 +305,7 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
       relatedPageIds: result.relatedNotes?.map((n) => n.id),
     });
 
-    const children = markdownToBlocks(buildBodyMarkdown(result));
+    const children = buildPageBlocks(result);
 
     try {
       await writeNotionPage(deps.notionClient, deps.notionDatabaseId, properties, children);

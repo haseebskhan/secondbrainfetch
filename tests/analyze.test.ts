@@ -9,6 +9,7 @@ describe("analyzeContent", () => {
           type: "text",
           text: JSON.stringify({
             title: "3-Ingredient Pasta",
+            summary: "A quick 3-ingredient weeknight pasta recipe.",
             category: "Recipes/Food",
             tags: ["pasta", "quick meals"],
           }),
@@ -24,9 +25,33 @@ describe("analyzeContent", () => {
 
     expect(result).toEqual({
       title: "3-Ingredient Pasta",
+      summary: "A quick 3-ingredient weeknight pasta recipe.",
       category: "Recipes/Food",
       tags: ["pasta", "quick meals"],
     });
+  });
+
+  it("defaults summary to an empty string when Claude omits it", async () => {
+    const create = vi.fn().mockResolvedValue({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            title: "No Summary Given",
+            category: "Other",
+            tags: [],
+          }),
+        },
+      ],
+    });
+    const fakeAnthropic = { messages: { create } } as any;
+
+    const result = await analyzeContent(
+      { transcript: null, frames: [] },
+      { anthropic: fakeAnthropic }
+    );
+
+    expect(result.summary).toBe("");
   });
 
   it("normalizes a category Claude returns outside the fixed list to Other", async () => {
@@ -36,6 +61,7 @@ describe("analyzeContent", () => {
           type: "text",
           text: JSON.stringify({
             title: "Random Clip",
+            summary: "Unclear content.",
             category: "Cryptocurrency",
             tags: [],
           }),
@@ -61,6 +87,7 @@ describe("analyzeContent", () => {
             "```json\n" +
             JSON.stringify({
               title: "Fenced Response",
+              summary: "Claude wrapped this in a code fence.",
               category: "Other",
               tags: [],
             }) +

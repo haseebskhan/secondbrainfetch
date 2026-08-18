@@ -26,6 +26,7 @@ export interface ReelMetadata {
 
 export interface AnalysisResult {
   title: string;
+  summary: string;
   category: Category;
   tags: string[];
 }
@@ -45,6 +46,7 @@ export interface PipelineResult {
   status: PipelineStatus;
   sourceUrl: string;
   title?: string;
+  summary?: string;
   reelDescription?: string;
   uploader?: string;
   externalSourceUrl?: string;

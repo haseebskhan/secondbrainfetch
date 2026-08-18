@@ -20,8 +20,9 @@ export async function analyzeContent(
     `Transcript (verbatim, from audio): ${input.transcript ?? "(no audio / not available)"}`,
     input.caption ? `Instagram caption: ${input.caption}` : undefined,
     `Pick "category" from exactly this list: ${CATEGORIES.join(", ")}.`,
-    `Respond with ONLY a JSON object: { "title": string, "category": string, "tags": string[] }.`,
+    `Respond with ONLY a JSON object: { "title": string, "summary": string, "category": string, "tags": string[] }.`,
     `"title" is ALWAYS a rewritten, clear, descriptive title for the actual content — not the raw Instagram caption or a generic "Video by X" label. It should let someone scanning a list of saved pages immediately know what's on this one (e.g. "3-Ingredient Weeknight Pasta" not "Video by chefusername").`,
+    `"summary" is a single short sentence (two at most) describing what this content is about, meant to sit at the very top of the page in a callout so someone can tell what it's about at a glance without reading further. This is distinct from the detailed notes elsewhere on the page — keep it brief and concrete, not a teaser.`,
     `"tags" is 2-5 free-form lowercase keywords describing the content.`,
   ]
     .filter((line): line is string => Boolean(line))
@@ -50,8 +51,11 @@ export async function analyzeContent(
     .trim();
   const parsed = JSON.parse(jsonText);
   const title = typeof parsed.title === "string" && parsed.title.trim() ? parsed.title : "Untitled";
+  const summary =
+    typeof parsed.summary === "string" && parsed.summary.trim() ? parsed.summary.trim() : "";
   return {
     title,
+    summary,
     category: normalizeCategory(typeof parsed.category === "string" ? parsed.category : ""),
     tags: Array.isArray(parsed.tags) ? parsed.tags : [],
   };

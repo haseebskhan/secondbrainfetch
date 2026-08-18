@@ -28,7 +28,10 @@ type NotionBlock =
   | { object: "block"; type: "heading_3"; heading_3: { rich_text: RichText[] } }
   | { object: "block"; type: "bulleted_list_item"; bulleted_list_item: { rich_text: RichText[] } }
   | { object: "block"; type: "numbered_list_item"; numbered_list_item: { rich_text: RichText[] } }
-  | { object: "block"; type: "paragraph"; paragraph: { rich_text: RichText[] } };
+  | { object: "block"; type: "paragraph"; paragraph: { rich_text: RichText[] } }
+  | { object: "block"; type: "callout"; callout: { rich_text: RichText[]; icon: unknown; color: string } }
+  | { object: "block"; type: "toggle"; toggle: { rich_text: RichText[]; children: NotionBlock[] } }
+  | { object: "block"; type: "divider"; divider: Record<string, never> };
 
 const LABEL_LINE = /^([A-Za-z][A-Za-z0-9 /]{1,40}):\s*(.*)$/;
 const NUMBERED_LINE = /^\d+\.\s+(.*)$/;
@@ -159,6 +162,47 @@ export function markdownToBlocks(markdown: string): NotionBlock[] {
   }
 
   return blocks;
+}
+
+/**
+ * A short, colored at-a-glance summary at the top of the page — so the
+ * user can tell what a saved page is about without reading further.
+ */
+export function buildSummaryCallout(summary: string): NotionBlock {
+  const text = summary.length > 1900 ? `${summary.slice(0, 1899)}…` : summary;
+  return {
+    object: "block",
+    type: "callout",
+    callout: {
+      rich_text: text.includes("**") ? parseInlineRichText(text) : [{ type: "text", text: { content: text } }],
+      icon: { type: "emoji", emoji: "💡" },
+      color: "blue_background",
+    },
+  };
+}
+
+/**
+ * The raw transcript is the longest, least-scannable section on the page —
+ * collapsing it into a toggle keeps the page readable by default while
+ * keeping the full text one click away.
+ */
+export function buildTranscriptToggle(transcript: string): NotionBlock {
+  return {
+    object: "block",
+    type: "toggle",
+    toggle: {
+      rich_text: [{ type: "text", text: { content: "Raw Transcript" }, annotations: { bold: true } }],
+      children: chunkText(transcript).map((chunk) => ({
+        object: "block" as const,
+        type: "paragraph" as const,
+        paragraph: { rich_text: [{ type: "text" as const, text: { content: chunk } }] },
+      })),
+    },
+  };
+}
+
+export function buildDivider(): NotionBlock {
+  return { object: "block", type: "divider", divider: {} };
 }
 
 export function buildPageProperties(data: {

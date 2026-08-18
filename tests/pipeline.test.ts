@@ -7,7 +7,9 @@ import { runPipeline } from "../src/pipeline.js";
 
 function blockText(block: any): string {
   const key = block.type;
-  return (block[key]?.rich_text ?? []).map((rt: any) => rt.text.content).join("");
+  const own = (block[key]?.rich_text ?? []).map((rt: any) => rt.text.content).join("");
+  const childBlocks = block[key]?.children ?? [];
+  return [own, ...childBlocks.map(blockText)].filter(Boolean).join("\n");
 }
 
 function allText(blocks: any[]): string {
@@ -26,6 +28,7 @@ function baseDeps(overrides: Partial<Record<string, any>> = {}) {
     extractFrames: vi.fn().mockResolvedValue([Buffer.from("img")]),
     analyzeContent: vi.fn().mockResolvedValue({
       title: "3-Ingredient Weeknight Pasta",
+      summary: "A quick 3-ingredient weeknight pasta recipe.",
       category: "Recipes/Food",
       tags: ["pasta"],
     }),
@@ -166,18 +169,60 @@ describe("runPipeline", () => {
     expect(text).not.toContain("Ingredients");
   });
 
-  it("orders the body with Source near the end, before Raw Transcript", async () => {
+  it("orders the body: callout summary first, Source after content notes, transcript toggle after Source", async () => {
     const deps = baseDeps();
 
     await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
 
     const children = deps.createNotionPage.mock.calls[0][3];
-    const headings = children
-      .filter((b: any) => b.type === "heading_2")
-      .map((b: any) => blockText(b));
 
-    expect(headings.indexOf("Source")).toBeGreaterThan(headings.indexOf("Recipe"));
-    expect(headings.indexOf("Raw Transcript")).toBeGreaterThan(headings.indexOf("Source"));
+    expect(children[0].type).toBe("callout");
+    expect(blockText(children[0])).toContain("A quick 3-ingredient weeknight pasta recipe.");
+
+    const headingIndex = (label: string) =>
+      children.findIndex((b: any) => b.type === "heading_2" && blockText(b) === label);
+    const toggleIndex = children.findIndex((b: any) => b.type === "toggle");
+
+    expect(headingIndex("Source")).toBeGreaterThan(headingIndex("Recipe"));
+    expect(toggleIndex).toBeGreaterThan(headingIndex("Source"));
+    expect(blockText(children[toggleIndex])).toContain("Raw Transcript");
+  });
+
+  it("orders Related Notes as the very last section, after the transcript toggle", async () => {
+    const deps = baseDeps({
+      findRelatedNotes: vi
+        .fn()
+        .mockResolvedValue([
+          { id: "page-earlier", title: "Earlier Pasta Reel", url: "https://notion.so/earlier" },
+        ]),
+    });
+
+    await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
+
+    const children = deps.createNotionPage.mock.calls[0][3];
+    const toggleIndex = children.findIndex((b: any) => b.type === "toggle");
+    const relatedIndex = children.findIndex(
+      (b: any) => b.type === "heading_2" && blockText(b) === "Related Notes"
+    );
+
+    expect(relatedIndex).toBeGreaterThan(toggleIndex);
+    expect(relatedIndex).toBe(children.length - 2); // heading followed by the bullet line
+  });
+
+  it("omits the callout when there is no summary", async () => {
+    const deps = baseDeps({
+      analyzeContent: vi.fn().mockResolvedValue({
+        title: "3-Ingredient Weeknight Pasta",
+        summary: "",
+        category: "Recipes/Food",
+        tags: ["pasta"],
+      }),
+    });
+
+    await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
+
+    const children = deps.createNotionPage.mock.calls[0][3];
+    expect(children.some((b: any) => b.type === "callout")).toBe(false);
   });
 
   it("skips the whole pipeline (no download, no Notion write) when the Source URL is already saved", async () => {
@@ -359,7 +404,7 @@ describe("runPipeline", () => {
     expect(result.status).toBe("Done");
   });
 
-  it("chunks a long transcript into multiple body blocks to stay under Notion's 2000-char limit", async () => {
+  it("chunks a long transcript into multiple paragraphs inside the toggle, each under Notion's 2000-char limit", async () => {
     const longTranscript = "word ".repeat(500); // ~2500 chars
     const deps = baseDeps({
       extractAndTranscribe: vi.fn().mockResolvedValue(longTranscript),
@@ -368,10 +413,12 @@ describe("runPipeline", () => {
     await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
 
     const children = deps.createNotionPage.mock.calls[0][3];
-    const transcriptBlocks = children.filter((b: any) => blockText(b).includes("word"));
-    expect(transcriptBlocks.length).toBeGreaterThan(1);
-    for (const block of children) {
-      expect(blockText(block).length).toBeLessThanOrEqual(1900);
+    const toggle = children.find((b: any) => b.type === "toggle");
+    const transcriptChunks: any[] = toggle.toggle.children;
+
+    expect(transcriptChunks.length).toBeGreaterThan(1);
+    for (const chunk of transcriptChunks) {
+      expect(blockText(chunk).length).toBeLessThanOrEqual(1900);
     }
   });
 
