@@ -54,4 +54,31 @@ describe("analyzeContent", () => {
 
     expect(result.category).toBe("Other");
   });
+
+  it("strips a markdown JSON code fence before parsing", async () => {
+    const create = vi.fn().mockResolvedValue({
+      content: [
+        {
+          type: "text",
+          text:
+            "```json\n" +
+            JSON.stringify({
+              title: "Fenced Response",
+              summary: "Claude wrapped this in a code fence.",
+              category: "Other",
+              tags: [],
+            }) +
+            "\n```",
+        },
+      ],
+    });
+    const fakeAnthropic = { messages: { create } } as any;
+
+    const result = await analyzeContent(
+      { transcript: null, frames: [] },
+      { anthropic: fakeAnthropic }
+    );
+
+    expect(result.title).toBe("Fenced Response");
+  });
 });

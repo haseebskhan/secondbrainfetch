@@ -39,7 +39,12 @@ export async function analyzeContent(
     throw new Error("Claude response did not contain a text block");
   }
 
-  const parsed = JSON.parse(textBlock.text);
+  const jsonText = textBlock.text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/, "")
+    .trim();
+  const parsed = JSON.parse(jsonText);
   const title = typeof parsed.title === "string" && parsed.title.trim() ? parsed.title : "Untitled";
   const summary =
     typeof parsed.summary === "string" && parsed.summary.trim()
