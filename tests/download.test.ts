@@ -18,6 +18,7 @@ describe("downloadMedia", () => {
       "after_move:filepath",
       "-o",
       "/tmp/out/%(id)s.%(ext)s",
+      "--",
       "https://www.instagram.com/reel/abc123/",
     ]);
   });

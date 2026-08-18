@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import path from "node:path";
 import type { DownloadResult } from "./types.js";
 
 const execFileAsync = promisify(execFile);
@@ -14,7 +15,8 @@ export async function downloadMedia(
     exec?: typeof execFileAsync;
   } = {}
 ): Promise<DownloadResult> {
-  const ytDlpPath = opts.ytDlpPath ?? process.env.YT_DLP_PATH ?? "yt-dlp";
+  const ytDlpPath =
+    opts.ytDlpPath ?? process.env.YT_DLP_PATH ?? path.join(process.cwd(), "bin/yt-dlp");
   const outDir = opts.outDir ?? "/tmp";
   const exec = opts.exec ?? execFileAsync;
 
@@ -26,6 +28,7 @@ export async function downloadMedia(
       "after_move:filepath",
       "-o",
       `${outDir}/%(id)s.%(ext)s`,
+      "--",
       url,
     ]);
     stdout = result.stdout;
