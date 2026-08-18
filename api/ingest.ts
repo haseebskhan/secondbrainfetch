@@ -14,7 +14,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const secret = req.headers["x-webhook-secret"];
-  if (!isValidWebhookSecret(Array.isArray(secret) ? secret[0] : secret, process.env.WEBHOOK_SECRET ?? "")) {
+  const secretValue = Array.isArray(secret) ? secret[0] : secret;
+  const expected = process.env.WEBHOOK_SECRET ?? "";
+  console.log(
+    "DEBUG webhook secret check:",
+    JSON.stringify({
+      receivedLength: secretValue?.length ?? null,
+      receivedPrefix: secretValue?.slice(0, 6) ?? null,
+      receivedSuffix: secretValue?.slice(-6) ?? null,
+      expectedLength: expected.length,
+      expectedPrefix: expected.slice(0, 6),
+      expectedSuffix: expected.slice(-6),
+      allHeaderKeys: Object.keys(req.headers),
+    })
+  );
+  if (!isValidWebhookSecret(secretValue, expected)) {
     res.status(401).json({ error: "Invalid webhook secret" });
     return;
   }
