@@ -30,12 +30,38 @@ type NotionBlock =
   | { object: "block"; type: "paragraph"; paragraph: { rich_text: RichText[] } };
 
 const LABEL_LINE = /^([A-Za-z][A-Za-z0-9 /]{1,40}):\s*(.*)$/;
+const BOLD_SPAN = /\*\*(.+?)\*\*/g;
+
+/**
+ * Splits inline "**bold**" markdown spans out of a line of text into
+ * alternating plain/bold rich_text segments. Falls back to a single plain
+ * segment when there's no bold markup.
+ */
+function parseInlineRichText(text: string): RichText[] {
+  const segments: RichText[] = [];
+  let lastIndex = 0;
+  BOLD_SPAN.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = BOLD_SPAN.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ type: "text", text: { content: text.slice(lastIndex, match.index) } });
+    }
+    if (match[1]) {
+      segments.push({ type: "text", text: { content: match[1] }, annotations: { bold: true } });
+    }
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    segments.push({ type: "text", text: { content: text.slice(lastIndex) } });
+  }
+  return segments.length > 0 ? segments : [{ type: "text", text: { content: text } }];
+}
 
 function paragraphBlocks(text: string): NotionBlock[] {
   return chunkText(text).map((chunk) => ({
     object: "block" as const,
     type: "paragraph" as const,
-    paragraph: { rich_text: [{ type: "text" as const, text: { content: chunk } }] },
+    paragraph: { rich_text: chunk.includes("**") ? parseInlineRichText(chunk) : [{ type: "text" as const, text: { content: chunk } }] },
   }));
 }
 
@@ -93,7 +119,11 @@ export function markdownToBlocks(markdown: string): NotionBlock[] {
         blocks.push({
           object: "block",
           type: "bulleted_list_item",
-          bulleted_list_item: { rich_text: [{ type: "text", text: { content: chunk } }] },
+          bulleted_list_item: {
+            rich_text: chunk.includes("**")
+              ? parseInlineRichText(chunk)
+              : [{ type: "text", text: { content: chunk } }],
+          },
         });
       }
       continue;

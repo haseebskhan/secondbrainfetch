@@ -124,6 +124,39 @@ describe("markdownToBlocks", () => {
     ]);
   });
 
+  it("bolds an inline **markdown bold** span within a plain line", () => {
+    expect(markdownToBlocks("**Title: **Willpower depletes with each decision")).toEqual([
+      {
+        object: "block",
+        type: "paragraph",
+        paragraph: {
+          rich_text: [
+            { type: "text", text: { content: "Title: " }, annotations: { bold: true } },
+            { type: "text", text: { content: "Willpower depletes with each decision" } },
+          ],
+        },
+      },
+    ]);
+  });
+
+  it("handles multiple bold spans and plain text around them in one line", () => {
+    expect(markdownToBlocks("before **bold one** middle **bold two** after")).toEqual([
+      {
+        object: "block",
+        type: "paragraph",
+        paragraph: {
+          rich_text: [
+            { type: "text", text: { content: "before " } },
+            { type: "text", text: { content: "bold one" }, annotations: { bold: true } },
+            { type: "text", text: { content: " middle " } },
+            { type: "text", text: { content: "bold two" }, annotations: { bold: true } },
+            { type: "text", text: { content: " after" } },
+          ],
+        },
+      },
+    ]);
+  });
+
   it("chunks a long plain paragraph into multiple blocks under the char limit", () => {
     const longLine = "word ".repeat(500).trim();
     const blocks = markdownToBlocks(longLine);
