@@ -40,10 +40,15 @@ export async function analyzeContent(
   }
 
   const parsed = JSON.parse(textBlock.text);
+  const title = typeof parsed.title === "string" && parsed.title.trim() ? parsed.title : "Untitled";
+  const summary =
+    typeof parsed.summary === "string" && parsed.summary.trim()
+      ? parsed.summary
+      : "No summary available.";
   return {
-    title: parsed.title,
-    summary: parsed.summary,
-    category: normalizeCategory(parsed.category),
+    title,
+    summary,
+    category: normalizeCategory(typeof parsed.category === "string" ? parsed.category : ""),
     tags: Array.isArray(parsed.tags) ? parsed.tags : [],
   };
 }
