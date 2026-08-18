@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { CATEGORIES, normalizeCategory } from "../src/categories.js";
+import { CATEGORIES, normalizeCategory, getCategoryIcon } from "../src/categories.js";
 
 describe("CATEGORIES", () => {
-  it("contains the 8 fixed categories in order", () => {
+  it("contains the 13 fixed categories in order", () => {
     expect(CATEGORIES).toEqual([
       "Recipes/Food",
       "Fitness/Health",
@@ -11,6 +11,11 @@ describe("CATEGORIES", () => {
       "Travel",
       "Quotes/Inspiration",
       "Entertainment/Humor",
+      "Trading",
+      "Claude Hacks",
+      "Parenting Hacks",
+      "Design Hacks",
+      "Design Inspiration",
       "Other",
     ]);
   });
@@ -25,11 +30,26 @@ describe("normalizeCategory", () => {
     expect(normalizeCategory("travel")).toBe("Travel");
   });
 
+  it("matches a new category case-insensitively", () => {
+    expect(normalizeCategory("trading")).toBe("Trading");
+  });
+
   it("falls back to Other for an unrecognized value", () => {
     expect(normalizeCategory("Cryptocurrency")).toBe("Other");
   });
 
   it("falls back to Other for an empty string", () => {
     expect(normalizeCategory("")).toBe("Other");
+  });
+});
+
+describe("getCategoryIcon", () => {
+  it("returns a distinct icon for every category", () => {
+    const icons = CATEGORIES.map((c) => getCategoryIcon(c));
+    expect(icons).toHaveLength(CATEGORIES.length);
+    for (const icon of icons) {
+      expect(typeof icon).toBe("string");
+      expect(icon.length).toBeGreaterThan(0);
+    }
   });
 });

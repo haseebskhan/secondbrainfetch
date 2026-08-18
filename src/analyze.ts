@@ -3,7 +3,7 @@ import type { AnalysisResult } from "./types.js";
 import { CATEGORIES, normalizeCategory } from "./categories.js";
 
 export async function analyzeContent(
-  input: { transcript: string | null; frames: Buffer[] },
+  input: { transcript: string | null; frames: Buffer[]; caption?: string },
   opts: { anthropic: Anthropic }
 ): Promise<AnalysisResult> {
   const imageBlocks = input.frames.map((frame) => ({
@@ -18,11 +18,14 @@ export async function analyzeContent(
   const prompt = [
     `You are cataloging a saved Instagram reel/post for a personal knowledge base.`,
     `Transcript (verbatim, from audio): ${input.transcript ?? "(no audio / not available)"}`,
+    input.caption ? `Instagram caption: ${input.caption}` : undefined,
     `Pick "category" from exactly this list: ${CATEGORIES.join(", ")}.`,
     `Respond with ONLY a JSON object: { "title": string, "category": string, "tags": string[] }.`,
-    `"title" is a short descriptive title, used only as a fallback if the actual Instagram post title/caption is unavailable.`,
+    `"title" is ALWAYS a rewritten, clear, descriptive title for the actual content — not the raw Instagram caption or a generic "Video by X" label. It should let someone scanning a list of saved pages immediately know what's on this one (e.g. "3-Ingredient Weeknight Pasta" not "Video by chefusername").`,
     `"tags" is 2-5 free-form lowercase keywords describing the content.`,
-  ].join("\n");
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n");
 
   const response = await opts.anthropic.messages.create({
     model: "claude-opus-4-5",

@@ -7,11 +7,13 @@ import type Anthropic from "@anthropic-ai/sdk";
 import ffmpegStaticPath from "ffmpeg-static";
 import type { PipelineResult } from "./types.js";
 import { buildPageProperties, createNotionPage, markdownToBlocks } from "./notion.js";
+import { getCategoryIcon } from "./categories.js";
 import { downloadMedia as downloadMediaFn, fetchMetadata as fetchMetadataFn } from "./download.js";
 import { extractAndTranscribe as extractAndTranscribeFn } from "./transcribe.js";
 import { extractFrames as extractFramesFn } from "./vision.js";
 import { analyzeContent as analyzeContentFn } from "./analyze.js";
-import { buildZettelkastenNotes as buildZettelkastenNotesFn } from "./zettelkasten.js";
+import { buildContentNotes as buildContentNotesFn } from "./contentTemplates.js";
+import { extractExternalUrl as extractExternalUrlFn, fetchWebpageText as fetchWebpageTextFn } from "./webfetch.js";
 
 const TITLE_MAX_LEN = 200;
 
@@ -21,7 +23,9 @@ export interface PipelineDeps {
   extractAndTranscribe?: typeof extractAndTranscribeFn;
   extractFrames?: typeof extractFramesFn;
   analyzeContent?: typeof analyzeContentFn;
-  buildZettelkastenNotes?: typeof buildZettelkastenNotesFn;
+  buildContentNotes?: typeof buildContentNotesFn;
+  extractExternalUrl?: typeof extractExternalUrlFn;
+  fetchWebpageText?: typeof fetchWebpageTextFn;
   createNotionPage?: typeof createNotionPage;
   notionClient: Client;
   notionDatabaseId: string;
@@ -35,9 +39,10 @@ function truncateTitle(title: string): string {
 
 /**
  * Composes the full page body as a constrained markdown document (headings,
- * label lines, plain paragraphs) that markdownToBlocks() converts into
- * proper Notion blocks — Source and metadata first, then the Zettelkasten
- * notes, with the raw transcript at the end.
+ * label lines, plain paragraphs, numbered/bulleted lists) that
+ * markdownToBlocks() converts into proper Notion blocks — Source and
+ * metadata first, then the category-specific content notes, with the raw
+ * transcript at the end.
  */
 function buildBodyMarkdown(result: PipelineResult): string {
   const sections: string[] = [];
@@ -48,13 +53,14 @@ function buildBodyMarkdown(result: PipelineResult): string {
       `URL: ${result.sourceUrl}`,
       result.uploader ? `Creator: ${result.uploader}` : undefined,
       result.reelDescription ? `Caption: ${result.reelDescription}` : undefined,
+      result.externalSourceUrl ? `Linked site: ${result.externalSourceUrl}` : undefined,
     ]
       .filter((line): line is string => Boolean(line))
       .join("\n")
   );
 
-  if (result.zettelkastenNotes) {
-    sections.push(`## Zettelkasten Notes\n${result.zettelkastenNotes}`);
+  if (result.contentNotes) {
+    sections.push(`## ${result.contentNotesHeading ?? "Notes"}\n${result.contentNotes}`);
   }
 
   if (result.errorMessage) {
@@ -72,7 +78,9 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
   const extractAndTranscribe = deps.extractAndTranscribe ?? extractAndTranscribeFn;
   const extractFrames = deps.extractFrames ?? extractFramesFn;
   const analyzeContent = deps.analyzeContent ?? analyzeContentFn;
-  const buildZettelkastenNotes = deps.buildZettelkastenNotes ?? buildZettelkastenNotesFn;
+  const buildContentNotes = deps.buildContentNotes ?? buildContentNotesFn;
+  const extractExternalUrl = deps.extractExternalUrl ?? extractExternalUrlFn;
+  const fetchWebpageText = deps.fetchWebpageText ?? fetchWebpageTextFn;
   const writeNotionPage = deps.createNotionPage ?? createNotionPage;
 
   // ffmpeg-static resolves to the bundled ffmpeg binary path; the bare
@@ -104,6 +112,21 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
         uploader = metadata.uploader;
       } catch (metadataErr) {
         console.error("Metadata fetch failed:", metadataErr);
+      }
+
+      // A caption often links to the original recipe/blog/site — fetch it
+      // opportunistically (cheap, non-fatal) so recipe processing has the
+      // full ingredient list/steps rather than just what's in the caption.
+      let externalSourceUrl: string | undefined;
+      let siteText: string | null = null;
+      const foundUrl = extractExternalUrl(reelDescription);
+      if (foundUrl) {
+        externalSourceUrl = foundUrl;
+        try {
+          siteText = await fetchWebpageText(foundUrl);
+        } catch (siteErr) {
+          console.error("External site fetch failed:", siteErr);
+        }
       }
 
       let transcript: string | null = null;
@@ -138,30 +161,35 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
           frames = [await readFile(media.filePath)];
         }
 
-        // Zettelkasten note-building only makes sense with a transcript; it
-        // runs independently of the visual analysis so a failure in one
-        // doesn't prevent the other from landing in the final page.
-        let zettelkastenNotes: string | undefined;
-        if (transcript) {
-          try {
-            zettelkastenNotes = await buildZettelkastenNotes(
-              { transcript, sourceUrl, reelTitle, uploader },
-              { anthropic: deps.anthropic }
-            );
-          } catch (zettelkastenErr) {
-            console.error("Zettelkasten note generation failed:", zettelkastenErr);
-          }
-        }
+        const analysis = await analyzeContent(
+          { transcript, frames, caption: reelDescription },
+          { anthropic: deps.anthropic }
+        );
 
-        const analysis = await analyzeContent({ transcript, frames }, { anthropic: deps.anthropic });
+        // Content-note generation is category-specific (recipe/steps/design
+        // ideas/default Zettelkasten) and runs independently of the rest of
+        // the analysis — a failure here shouldn't prevent the page from
+        // recording the title/category/transcript that already succeeded.
+        let contentNotesResult: { heading: string; notes: string } | undefined;
+        try {
+          contentNotesResult = await buildContentNotes(
+            analysis.category,
+            { transcript, caption: reelDescription, siteText, sourceUrl, reelTitle, uploader },
+            { anthropic: deps.anthropic }
+          );
+        } catch (contentNotesErr) {
+          console.error("Content note generation failed:", contentNotesErr);
+        }
 
         result = {
           status: "Done",
           sourceUrl,
-          title: (reelTitle || analysis.title).trim(),
+          title: analysis.title.trim(),
           reelDescription,
           uploader,
-          zettelkastenNotes,
+          externalSourceUrl,
+          contentNotes: contentNotesResult?.notes,
+          contentNotesHeading: contentNotesResult?.heading,
           category: analysis.category,
           tags: analysis.tags,
           transcript,
@@ -174,6 +202,7 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
           title: reelTitle || undefined,
           reelDescription,
           uploader,
+          externalSourceUrl,
           transcript,
           errorMessage: message,
         };
@@ -192,12 +221,15 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
       sourceUrl: result.sourceUrl,
       category: result.category ?? "Other",
       tags: result.tags ?? [],
+      creator: result.uploader,
+      externalSourceUrl: result.externalSourceUrl,
     });
+    const icon = getCategoryIcon(result.category ?? "Other");
 
     const children = markdownToBlocks(buildBodyMarkdown(result));
 
     try {
-      await writeNotionPage(deps.notionClient, deps.notionDatabaseId, properties, children);
+      await writeNotionPage(deps.notionClient, deps.notionDatabaseId, properties, children, icon);
     } catch (writeErr) {
       // Never silently drop a saved link: if the full write fails (e.g. an
       // unexpected 400 from a malformed field), retry once with a minimal
@@ -217,7 +249,13 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
 
       // If this also throws, let it propagate — the outer .catch() in
       // api/ingest.ts logs it, and there's nothing more we can safely do.
-      await writeNotionPage(deps.notionClient, deps.notionDatabaseId, degradedProperties, degradedChildren);
+      await writeNotionPage(
+        deps.notionClient,
+        deps.notionDatabaseId,
+        degradedProperties,
+        degradedChildren,
+        getCategoryIcon("Other")
+      );
 
       result = {
         ...result,

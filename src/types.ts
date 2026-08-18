@@ -6,6 +6,11 @@ export type Category =
   | "Travel"
   | "Quotes/Inspiration"
   | "Entertainment/Humor"
+  | "Trading"
+  | "Claude Hacks"
+  | "Parenting Hacks"
+  | "Design Hacks"
+  | "Design Inspiration"
   | "Other";
 
 export interface DownloadResult {
@@ -35,7 +40,9 @@ export interface PipelineResult {
   title?: string;
   reelDescription?: string;
   uploader?: string;
-  zettelkastenNotes?: string;
+  externalSourceUrl?: string;
+  contentNotes?: string;
+  contentNotesHeading?: string;
   category?: Category;
   tags?: string[];
   transcript?: string | null;

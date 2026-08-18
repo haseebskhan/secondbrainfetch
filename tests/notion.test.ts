@@ -18,10 +18,36 @@ describe("buildPageProperties", () => {
       "Date Saved": { date: { start: expect.any(String) } },
     });
   });
+
+  it("includes Creator and External Source when provided", () => {
+    const props = buildPageProperties({
+      title: "3-Ingredient Pasta",
+      sourceUrl: "https://www.instagram.com/reel/abc123/",
+      category: "Recipes/Food",
+      tags: [],
+      creator: "chefusername",
+      externalSourceUrl: "https://example.com/recipe",
+    });
+
+    expect(props.Creator).toEqual({ rich_text: [{ text: { content: "chefusername" } }] });
+    expect(props["External Source"]).toEqual({ url: "https://example.com/recipe" });
+  });
+
+  it("omits Creator and External Source when not provided", () => {
+    const props = buildPageProperties({
+      title: "3-Ingredient Pasta",
+      sourceUrl: "https://www.instagram.com/reel/abc123/",
+      category: "Recipes/Food",
+      tags: [],
+    });
+
+    expect(props.Creator).toBeUndefined();
+    expect(props["External Source"]).toBeUndefined();
+  });
 });
 
 describe("createNotionPage", () => {
-  it("calls pages.create with the database id, properties, and children blocks", async () => {
+  it("calls pages.create with the database id, properties, children blocks, and icon", async () => {
     const create = vi.fn().mockResolvedValue({ id: "page-123" });
     const fakeClient = { pages: { create } } as any;
     const children = [
@@ -36,7 +62,8 @@ describe("createNotionPage", () => {
       fakeClient,
       "db-456",
       { Title: { title: [{ text: { content: "X" } }] } },
-      children
+      children,
+      "⬛"
     );
 
     expect(pageId).toBe("page-123");
@@ -44,6 +71,20 @@ describe("createNotionPage", () => {
       parent: { database_id: "db-456" },
       properties: { Title: { title: [{ text: { content: "X" } }] } },
       children,
+      icon: { type: "emoji", emoji: "⬛" },
+    });
+  });
+
+  it("omits the icon field when none is given", async () => {
+    const create = vi.fn().mockResolvedValue({ id: "page-123" });
+    const fakeClient = { pages: { create } } as any;
+
+    await createNotionPage(fakeClient, "db-456", { Title: {} }, []);
+
+    expect(create).toHaveBeenCalledWith({
+      parent: { database_id: "db-456" },
+      properties: { Title: {} },
+      children: [],
     });
   });
 });
@@ -80,6 +121,21 @@ describe("markdownToBlocks", () => {
         object: "block",
         type: "bulleted_list_item",
         bulleted_list_item: { rich_text: [{ type: "text", text: { content: "second idea" } }] },
+      },
+    ]);
+  });
+
+  it("converts numbered lines to numbered_list_item blocks", () => {
+    expect(markdownToBlocks("1. Boil the water\n2. Add the pasta")).toEqual([
+      {
+        object: "block",
+        type: "numbered_list_item",
+        numbered_list_item: { rich_text: [{ type: "text", text: { content: "Boil the water" } }] },
+      },
+      {
+        object: "block",
+        type: "numbered_list_item",
+        numbered_list_item: { rich_text: [{ type: "text", text: { content: "Add the pasta" } }] },
       },
     ]);
   });

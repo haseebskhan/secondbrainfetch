@@ -18,20 +18,22 @@ function baseDeps(overrides: Partial<Record<string, any>> = {}) {
   return {
     downloadMedia: vi.fn().mockResolvedValue({ filePath: "/tmp/out/reel.mp4", isVideo: true }),
     fetchMetadata: vi.fn().mockResolvedValue({
-      title: "3-Ingredient Pasta",
+      title: "Video by chefusername",
       description: "A quick weeknight pasta recipe.",
       uploader: "chefusername",
     }),
     extractAndTranscribe: vi.fn().mockResolvedValue("today we're making pasta"),
     extractFrames: vi.fn().mockResolvedValue([Buffer.from("img")]),
     analyzeContent: vi.fn().mockResolvedValue({
-      title: "3-Ingredient Pasta (fallback)",
+      title: "3-Ingredient Weeknight Pasta",
       category: "Recipes/Food",
       tags: ["pasta"],
     }),
-    buildZettelkastenNotes: vi
+    buildContentNotes: vi
       .fn()
-      .mockResolvedValue("### 1. Literature Note\nA note about the pasta reel."),
+      .mockResolvedValue({ heading: "Recipe", notes: "### Ingredients\n- pasta\n### Steps\n1. Boil water" }),
+    extractExternalUrl: vi.fn().mockReturnValue(null),
+    fetchWebpageText: vi.fn().mockResolvedValue("fetched site text"),
     createNotionPage: vi.fn().mockResolvedValue("page-1"),
     notionClient: {} as any,
     notionDatabaseId: "db-1",
@@ -52,27 +54,89 @@ describe("runPipeline", () => {
     expect(deps.createNotionPage).toHaveBeenCalledTimes(1);
   });
 
-  it("uses the real Instagram title as the page title when metadata succeeds", async () => {
+  it("always uses Claude's rewritten title, not the raw Instagram title", async () => {
     const deps = baseDeps();
 
     await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
 
     const properties = deps.createNotionPage.mock.calls[0][2];
-    expect(properties.Title.title[0].text.content).toBe("3-Ingredient Pasta");
+    expect(properties.Title.title[0].text.content).toBe("3-Ingredient Weeknight Pasta");
   });
 
-  it("falls back to Claude's title when metadata fetch fails", async () => {
+  it("passes the caption into analyzeContent", async () => {
+    const deps = baseDeps();
+
+    await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
+
+    expect(deps.analyzeContent).toHaveBeenCalledWith(
+      { transcript: "today we're making pasta", frames: [Buffer.from("img")], caption: "A quick weeknight pasta recipe." },
+      { anthropic: deps.anthropic }
+    );
+  });
+
+  it("dispatches content-note generation with the category Claude picked", async () => {
+    const deps = baseDeps();
+
+    await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
+
+    expect(deps.buildContentNotes).toHaveBeenCalledWith(
+      "Recipes/Food",
+      {
+        transcript: "today we're making pasta",
+        caption: "A quick weeknight pasta recipe.",
+        siteText: null,
+        sourceUrl: "https://www.instagram.com/reel/abc/",
+        reelTitle: "Video by chefusername",
+        uploader: "chefusername",
+      },
+      { anthropic: deps.anthropic }
+    );
+  });
+
+  it("sets the category icon and Creator/External Source properties on the Notion page", async () => {
+    const deps = baseDeps();
+
+    await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
+
+    const [, , properties, , icon] = deps.createNotionPage.mock.calls[0];
+    expect(properties.Creator.rich_text[0].text.content).toBe("chefusername");
+    expect(icon).toBe("⬛"); // Recipes/Food icon
+  });
+
+  it("fetches a linked external site found in the caption and passes its text + records External Source", async () => {
     const deps = baseDeps({
-      fetchMetadata: vi.fn().mockRejectedValue(new Error("private account")),
+      extractExternalUrl: vi.fn().mockReturnValue("https://example.com/recipe"),
     });
 
     await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
 
+    expect(deps.fetchWebpageText).toHaveBeenCalledWith("https://example.com/recipe");
+    expect(deps.buildContentNotes).toHaveBeenCalledWith(
+      "Recipes/Food",
+      expect.objectContaining({ siteText: "fetched site text" }),
+      { anthropic: deps.anthropic }
+    );
     const properties = deps.createNotionPage.mock.calls[0][2];
-    expect(properties.Title.title[0].text.content).toBe("3-Ingredient Pasta (fallback)");
+    expect(properties["External Source"]).toEqual({ url: "https://example.com/recipe" });
   });
 
-  it("includes Source, Zettelkasten Notes, and Raw Transcript sections in the body, with no Visual Description", async () => {
+  it("does not fail the pipeline when the external site fetch throws", async () => {
+    const deps = baseDeps({
+      extractExternalUrl: vi.fn().mockReturnValue("https://example.com/recipe"),
+      fetchWebpageText: vi.fn().mockRejectedValue(new Error("blocked")),
+    });
+
+    const result = await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
+
+    expect(result.status).toBe("Done");
+    expect(deps.buildContentNotes).toHaveBeenCalledWith(
+      "Recipes/Food",
+      expect.objectContaining({ siteText: null }),
+      { anthropic: deps.anthropic }
+    );
+  });
+
+  it("includes Source, the content-notes heading, and Raw Transcript sections in the body, with no Visual Description", async () => {
     const deps = baseDeps();
 
     await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
@@ -81,23 +145,22 @@ describe("runPipeline", () => {
     const text = allText(children);
     expect(text).toContain("Source");
     expect(text).toContain("chefusername");
-    expect(text).toContain("A note about the pasta reel");
+    expect(text).toContain("Ingredients");
     expect(text).toContain("Raw Transcript");
     expect(text).toContain("today we're making pasta");
     expect(text).not.toContain("Visual Description");
   });
 
-  it("skips Zettelkasten note generation when there is no transcript", async () => {
+  it("skips content-note generation when buildContentNotes returns undefined", async () => {
     const deps = baseDeps({
-      extractAndTranscribe: vi.fn().mockResolvedValue(null),
+      buildContentNotes: vi.fn().mockResolvedValue(undefined),
     });
 
     await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
 
-    expect(deps.buildZettelkastenNotes).not.toHaveBeenCalled();
     const children = deps.createNotionPage.mock.calls[0][3];
     const text = allText(children);
-    expect(text).not.toContain("Zettelkasten Notes");
+    expect(text).not.toContain("Ingredients");
   });
 
   it("skips ffmpeg-based transcription/frame extraction and reads the image directly for image posts", async () => {
@@ -114,7 +177,7 @@ describe("runPipeline", () => {
       expect(deps.extractAndTranscribe).not.toHaveBeenCalled();
       expect(deps.extractFrames).not.toHaveBeenCalled();
       expect(deps.analyzeContent).toHaveBeenCalledWith(
-        { transcript: null, frames: [expect.any(Buffer)] },
+        { transcript: null, frames: [expect.any(Buffer)], caption: "A quick weeknight pasta recipe." },
         { anthropic: deps.anthropic }
       );
       expect(result.status).toBe("Done");
@@ -155,7 +218,7 @@ describe("runPipeline", () => {
 
     expect(deps.extractFrames).toHaveBeenCalled();
     expect(deps.analyzeContent).toHaveBeenCalledWith(
-      { transcript: null, frames: [Buffer.from("img")] },
+      { transcript: null, frames: [Buffer.from("img")], caption: "A quick weeknight pasta recipe." },
       { anthropic: deps.anthropic }
     );
     expect(result.status).toBe("Done");
@@ -170,7 +233,7 @@ describe("runPipeline", () => {
 
     expect(deps.extractAndTranscribe).toHaveBeenCalled();
     expect(deps.analyzeContent).toHaveBeenCalledWith(
-      { transcript: "today we're making pasta", frames: [] },
+      { transcript: "today we're making pasta", frames: [], caption: "A quick weeknight pasta recipe." },
       { anthropic: deps.anthropic }
     );
     expect(result.status).toBe("Done");

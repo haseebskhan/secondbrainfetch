@@ -27,9 +27,11 @@ type NotionBlock =
   | { object: "block"; type: "heading_2"; heading_2: { rich_text: RichText[] } }
   | { object: "block"; type: "heading_3"; heading_3: { rich_text: RichText[] } }
   | { object: "block"; type: "bulleted_list_item"; bulleted_list_item: { rich_text: RichText[] } }
+  | { object: "block"; type: "numbered_list_item"; numbered_list_item: { rich_text: RichText[] } }
   | { object: "block"; type: "paragraph"; paragraph: { rich_text: RichText[] } };
 
 const LABEL_LINE = /^([A-Za-z][A-Za-z0-9 /]{1,40}):\s*(.*)$/;
+const NUMBERED_LINE = /^\d+\.\s+(.*)$/;
 const BOLD_SPAN = /\*\*(.+?)\*\*/g;
 
 /**
@@ -129,6 +131,24 @@ export function markdownToBlocks(markdown: string): NotionBlock[] {
       continue;
     }
 
+    const numberedMatch = line.match(NUMBERED_LINE);
+    if (numberedMatch) {
+      const content = numberedMatch[1].trim();
+      const chunks = chunkText(content);
+      for (const chunk of chunks) {
+        blocks.push({
+          object: "block",
+          type: "numbered_list_item",
+          numbered_list_item: {
+            rich_text: chunk.includes("**")
+              ? parseInlineRichText(chunk)
+              : [{ type: "text", text: { content: chunk } }],
+          },
+        });
+      }
+      continue;
+    }
+
     const labelMatch = line.match(LABEL_LINE);
     if (labelMatch) {
       blocks.push(...labelParagraphBlocks(labelMatch[1], labelMatch[2]));
@@ -146,26 +166,37 @@ export function buildPageProperties(data: {
   sourceUrl: string;
   category: Category;
   tags: string[];
+  creator?: string;
+  externalSourceUrl?: string;
 }): Record<string, unknown> {
-  return {
+  const properties: Record<string, unknown> = {
     Title: { title: [{ text: { content: data.title } }] },
     "Source URL": { url: data.sourceUrl },
     Category: { select: { name: data.category } },
     Tags: { multi_select: data.tags.map((t) => ({ name: t })) },
     "Date Saved": { date: { start: new Date().toISOString() } },
   };
+  if (data.creator) {
+    properties.Creator = { rich_text: [{ text: { content: data.creator } }] };
+  }
+  if (data.externalSourceUrl) {
+    properties["External Source"] = { url: data.externalSourceUrl };
+  }
+  return properties;
 }
 
 export async function createNotionPage(
   client: Client,
   databaseId: string,
   properties: Record<string, unknown>,
-  children: object[]
+  children: object[],
+  icon?: string
 ): Promise<string> {
   const response = await client.pages.create({
     parent: { database_id: databaseId },
     properties: properties as CreatePageParameters["properties"],
     children: children as CreatePageParameters["children"],
+    ...(icon ? { icon: { type: "emoji" as const, emoji: icon as any } } : {}),
   });
   return response.id;
 }
