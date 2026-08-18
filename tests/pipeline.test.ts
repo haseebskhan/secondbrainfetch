@@ -34,6 +34,9 @@ function baseDeps(overrides: Partial<Record<string, any>> = {}) {
       .mockResolvedValue({ heading: "Recipe", notes: "### Ingredients\n- pasta\n### Steps\n1. Boil water" }),
     extractExternalUrl: vi.fn().mockReturnValue(null),
     fetchWebpageText: vi.fn().mockResolvedValue("fetched site text"),
+    extractKeyItems: vi.fn().mockResolvedValue([]),
+    findExistingPageBySourceUrl: vi.fn().mockResolvedValue(false),
+    findRelatedNotes: vi.fn().mockResolvedValue([]),
     createNotionPage: vi.fn().mockResolvedValue("page-1"),
     notionClient: {} as any,
     notionDatabaseId: "db-1",
@@ -161,6 +164,97 @@ describe("runPipeline", () => {
     const children = deps.createNotionPage.mock.calls[0][3];
     const text = allText(children);
     expect(text).not.toContain("Ingredients");
+  });
+
+  it("orders the body with Source near the end, before Raw Transcript", async () => {
+    const deps = baseDeps();
+
+    await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
+
+    const children = deps.createNotionPage.mock.calls[0][3];
+    const headings = children
+      .filter((b: any) => b.type === "heading_2")
+      .map((b: any) => blockText(b));
+
+    expect(headings.indexOf("Source")).toBeGreaterThan(headings.indexOf("Recipe"));
+    expect(headings.indexOf("Raw Transcript")).toBeGreaterThan(headings.indexOf("Source"));
+  });
+
+  it("skips the whole pipeline (no download, no Notion write) when the Source URL is already saved", async () => {
+    const deps = baseDeps({
+      findExistingPageBySourceUrl: vi.fn().mockResolvedValue(true),
+    });
+
+    const result = await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
+
+    expect(result.status).toBe("Duplicate");
+    expect(deps.downloadMedia).not.toHaveBeenCalled();
+    expect(deps.createNotionPage).not.toHaveBeenCalled();
+  });
+
+  it("proceeds normally when the duplicate check itself fails", async () => {
+    const deps = baseDeps({
+      findExistingPageBySourceUrl: vi.fn().mockRejectedValue(new Error("Notion API down")),
+    });
+
+    const result = await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
+
+    expect(result.status).toBe("Done");
+    expect(deps.createNotionPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("includes a Mentioned Tools & Resources section at the top when extractKeyItems finds a list", async () => {
+    const deps = baseDeps({
+      extractKeyItems: vi.fn().mockResolvedValue(["Ponytail", "Claude Mem"]),
+    });
+
+    await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
+
+    const children = deps.createNotionPage.mock.calls[0][3];
+    const headings = children
+      .filter((b: any) => b.type === "heading_2")
+      .map((b: any) => blockText(b));
+    expect(headings[0]).toBe("Mentioned Tools & Resources");
+    const text = allText(children);
+    expect(text).toContain("Ponytail");
+    expect(text).toContain("Claude Mem");
+  });
+
+  it("omits the Mentioned Tools & Resources section when extractKeyItems finds nothing", async () => {
+    const deps = baseDeps();
+
+    await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
+
+    const children = deps.createNotionPage.mock.calls[0][3];
+    const text = allText(children);
+    expect(text).not.toContain("Mentioned Tools & Resources");
+  });
+
+  it("includes a Related Notes section linking pages findRelatedNotes returns", async () => {
+    const deps = baseDeps({
+      findRelatedNotes: vi
+        .fn()
+        .mockResolvedValue([{ title: "Earlier Pasta Reel", url: "https://notion.so/earlier" }]),
+    });
+
+    await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
+
+    const children = deps.createNotionPage.mock.calls[0][3];
+    const text = allText(children);
+    expect(text).toContain("Related Notes");
+    expect(text).toContain("Earlier Pasta Reel");
+    expect(text).toContain("https://notion.so/earlier");
+  });
+
+  it("calls findRelatedNotes with the category and tags Claude picked", async () => {
+    const deps = baseDeps();
+
+    await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
+
+    expect(deps.findRelatedNotes).toHaveBeenCalledWith(deps.notionClient, deps.notionDatabaseId, {
+      category: "Recipes/Food",
+      tags: ["pasta"],
+    });
   });
 
   it("skips ffmpeg-based transcription/frame extraction and reads the image directly for image posts", async () => {

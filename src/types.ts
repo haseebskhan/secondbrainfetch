@@ -31,8 +31,14 @@ export interface AnalysisResult {
 }
 
 // Tracks pipeline outcome internally (drives the Failed/Partial degraded-
-// retry logic) — no longer surfaced as a Notion property.
-export type PipelineStatus = "Done" | "Failed" | "Partial";
+// retry logic) — no longer surfaced as a Notion property. "Duplicate" means
+// this Source URL was already saved; the pipeline exits before any writes.
+export type PipelineStatus = "Done" | "Failed" | "Partial" | "Duplicate";
+
+export interface RelatedNote {
+  title: string;
+  url: string;
+}
 
 export interface PipelineResult {
   status: PipelineStatus;
@@ -41,8 +47,10 @@ export interface PipelineResult {
   reelDescription?: string;
   uploader?: string;
   externalSourceUrl?: string;
+  keyItems?: string[];
   contentNotes?: string;
   contentNotesHeading?: string;
+  relatedNotes?: RelatedNote[];
   category?: Category;
   tags?: string[];
   transcript?: string | null;

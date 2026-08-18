@@ -13,6 +13,9 @@ import { extractFrames as extractFramesFn } from "./vision.js";
 import { analyzeContent as analyzeContentFn } from "./analyze.js";
 import { buildContentNotes as buildContentNotesFn } from "./contentTemplates.js";
 import { extractExternalUrl as extractExternalUrlFn, fetchWebpageText as fetchWebpageTextFn } from "./webfetch.js";
+import { extractKeyItems as extractKeyItemsFn } from "./keyItems.js";
+import { findExistingPageBySourceUrl as findExistingPageBySourceUrlFn } from "./duplicates.js";
+import { findRelatedNotes as findRelatedNotesFn } from "./relatedNotes.js";
 
 const TITLE_MAX_LEN = 200;
 
@@ -25,6 +28,9 @@ export interface PipelineDeps {
   buildContentNotes?: typeof buildContentNotesFn;
   extractExternalUrl?: typeof extractExternalUrlFn;
   fetchWebpageText?: typeof fetchWebpageTextFn;
+  extractKeyItems?: typeof extractKeyItemsFn;
+  findExistingPageBySourceUrl?: typeof findExistingPageBySourceUrlFn;
+  findRelatedNotes?: typeof findRelatedNotesFn;
   createNotionPage?: typeof createNotionPage;
   notionClient: Client;
   notionDatabaseId: string;
@@ -39,12 +45,31 @@ function truncateTitle(title: string): string {
 /**
  * Composes the full page body as a constrained markdown document (headings,
  * label lines, plain paragraphs, numbered/bulleted lists) that
- * markdownToBlocks() converts into proper Notion blocks — Source and
- * metadata first, then the category-specific content notes, with the raw
- * transcript at the end.
+ * markdownToBlocks() converts into proper Notion blocks. Order: a quick-
+ * reference list of named items (if any), the category-specific content
+ * notes, related past notes, then Source/metadata and the raw transcript
+ * at the very end.
  */
 function buildBodyMarkdown(result: PipelineResult): string {
   const sections: string[] = [];
+
+  if (result.keyItems && result.keyItems.length > 0) {
+    sections.push(`## Mentioned Tools & Resources\n${result.keyItems.map((i) => `- ${i}`).join("\n")}`);
+  }
+
+  if (result.contentNotes) {
+    sections.push(`## ${result.contentNotesHeading ?? "Notes"}\n${result.contentNotes}`);
+  }
+
+  if (result.relatedNotes && result.relatedNotes.length > 0) {
+    sections.push(
+      `## Related Notes\n${result.relatedNotes.map((n) => `- ${n.title}: ${n.url}`).join("\n")}`
+    );
+  }
+
+  if (result.errorMessage) {
+    sections.push(`## Error\n${result.errorMessage}`);
+  }
 
   sections.push(
     [
@@ -57,14 +82,6 @@ function buildBodyMarkdown(result: PipelineResult): string {
       .filter((line): line is string => Boolean(line))
       .join("\n")
   );
-
-  if (result.contentNotes) {
-    sections.push(`## ${result.contentNotesHeading ?? "Notes"}\n${result.contentNotes}`);
-  }
-
-  if (result.errorMessage) {
-    sections.push(`## Error\n${result.errorMessage}`);
-  }
 
   sections.push(`## Raw Transcript\n${result.transcript ?? "No transcript available."}`);
 
@@ -80,7 +97,23 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
   const buildContentNotes = deps.buildContentNotes ?? buildContentNotesFn;
   const extractExternalUrl = deps.extractExternalUrl ?? extractExternalUrlFn;
   const fetchWebpageText = deps.fetchWebpageText ?? fetchWebpageTextFn;
+  const extractKeyItems = deps.extractKeyItems ?? extractKeyItemsFn;
+  const findExistingPageBySourceUrl = deps.findExistingPageBySourceUrl ?? findExistingPageBySourceUrlFn;
+  const findRelatedNotes = deps.findRelatedNotes ?? findRelatedNotesFn;
   const writeNotionPage = deps.createNotionPage ?? createNotionPage;
+
+  // Skip the whole pipeline (no download, no API spend, no Notion write)
+  // when this exact link was already saved — re-sharing a reel shouldn't
+  // create a duplicate entry. A failure to check is not fatal; treat it as
+  // "not a duplicate" and proceed normally.
+  try {
+    const isDuplicate = await findExistingPageBySourceUrl(deps.notionClient, deps.notionDatabaseId, sourceUrl);
+    if (isDuplicate) {
+      return { status: "Duplicate", sourceUrl };
+    }
+  } catch (dupErr) {
+    console.error("Duplicate check failed:", dupErr);
+  }
 
   // ffmpeg-static resolves to the bundled ffmpeg binary path; the bare
   // "ffmpeg" command is not on PATH in the Vercel Node runtime.
@@ -180,6 +213,26 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
           console.error("Content note generation failed:", contentNotesErr);
         }
 
+        let keyItems: string[] = [];
+        try {
+          keyItems = await extractKeyItems(
+            { transcript, caption: reelDescription },
+            { anthropic: deps.anthropic }
+          );
+        } catch (keyItemsErr) {
+          console.error("Key item extraction failed:", keyItemsErr);
+        }
+
+        let relatedNotes: { title: string; url: string }[] = [];
+        try {
+          relatedNotes = await findRelatedNotes(deps.notionClient, deps.notionDatabaseId, {
+            category: analysis.category,
+            tags: analysis.tags,
+          });
+        } catch (relatedErr) {
+          console.error("Related notes lookup failed:", relatedErr);
+        }
+
         result = {
           status: "Done",
           sourceUrl,
@@ -187,8 +240,10 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
           reelDescription,
           uploader,
           externalSourceUrl,
+          keyItems,
           contentNotes: contentNotesResult?.notes,
           contentNotesHeading: contentNotesResult?.heading,
+          relatedNotes,
           category: analysis.category,
           tags: analysis.tags,
           transcript,

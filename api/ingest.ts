@@ -32,7 +32,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(400).json({ error: "Missing or invalid 'url' field" });
     return;
   }
-  if (parsedUrl.hostname !== "instagram.com" && !parsedUrl.hostname.endsWith(".instagram.com")) {
+  const ALLOWED_HOSTS = ["instagram.com", "tiktok.com", "youtube.com", "youtu.be"];
+  const isAllowedHost = ALLOWED_HOSTS.some(
+    (host) => parsedUrl.hostname === host || parsedUrl.hostname.endsWith(`.${host}`)
+  );
+  if (!isAllowedHost) {
     res.status(400).json({ error: "Missing or invalid 'url' field" });
     return;
   }
