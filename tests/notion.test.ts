@@ -96,6 +96,29 @@ describe("createNotionPage", () => {
       children,
     });
   });
+
+  it("sets an external icon when iconUrl is provided", async () => {
+    const create = vi.fn().mockResolvedValue({ id: "page-123" });
+    const fakeClient = { pages: { create } } as any;
+
+    await createNotionPage(
+      fakeClient,
+      "db-456",
+      { Title: { title: [{ text: { content: "X" } }] } },
+      [],
+      "https://cdn.jsdelivr.net/npm/@phosphor-icons/core@2/assets/fill/code-fill.svg"
+    );
+
+    expect(create).toHaveBeenCalledWith({
+      parent: { database_id: "db-456" },
+      properties: { Title: { title: [{ text: { content: "X" } }] } },
+      children: [],
+      icon: {
+        type: "external",
+        external: { url: "https://cdn.jsdelivr.net/npm/@phosphor-icons/core@2/assets/fill/code-fill.svg" },
+      },
+    });
+  });
 });
 
 describe("markdownToBlocks", () => {

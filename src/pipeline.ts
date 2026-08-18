@@ -23,6 +23,7 @@ import { extractExternalUrl as extractExternalUrlFn, fetchWebpageText as fetchWe
 import { extractKeyItems as extractKeyItemsFn } from "./keyItems.js";
 import { findExistingPageBySourceUrl as findExistingPageBySourceUrlFn } from "./duplicates.js";
 import { findRelatedNotes as findRelatedNotesFn } from "./relatedNotes.js";
+import { getCategoryIconUrl } from "./categories.js";
 
 const TITLE_MAX_LEN = 200;
 
@@ -306,9 +307,10 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
     });
 
     const children = buildPageBlocks(result);
+    const iconUrl = getCategoryIconUrl(result.category ?? "Other");
 
     try {
-      await writeNotionPage(deps.notionClient, deps.notionDatabaseId, properties, children);
+      await writeNotionPage(deps.notionClient, deps.notionDatabaseId, properties, children, iconUrl);
     } catch (writeErr) {
       // Never silently drop a saved link: if the full write fails (e.g. an
       // unexpected 400 from a malformed field), retry once with a minimal
@@ -328,7 +330,13 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
 
       // If this also throws, let it propagate — the outer .catch() in
       // api/ingest.ts logs it, and there's nothing more we can safely do.
-      await writeNotionPage(deps.notionClient, deps.notionDatabaseId, degradedProperties, degradedChildren);
+      await writeNotionPage(
+        deps.notionClient,
+        deps.notionDatabaseId,
+        degradedProperties,
+        degradedChildren,
+        getCategoryIconUrl("Other")
+      );
 
       result = {
         ...result,

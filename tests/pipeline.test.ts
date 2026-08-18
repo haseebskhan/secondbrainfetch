@@ -99,14 +99,24 @@ describe("runPipeline", () => {
     );
   });
 
-  it("sets the Creator property on the Notion page, without an icon", async () => {
+  it("sets the Creator property on the Notion page", async () => {
     const deps = baseDeps();
 
     await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
 
     const call = deps.createNotionPage.mock.calls[0];
     expect(call[2].Creator.rich_text[0].text.content).toBe("chefusername");
-    expect(call).toHaveLength(4);
+  });
+
+  it("sets a category-specific Phosphor icon URL on the Notion page", async () => {
+    const deps = baseDeps();
+
+    await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
+
+    const call = deps.createNotionPage.mock.calls[0];
+    expect(call[4]).toBe(
+      "https://cdn.jsdelivr.net/npm/@phosphor-icons/core@2/assets/fill/bowl-food-fill.svg"
+    );
   });
 
   it("fetches a linked external site found in the caption and passes its text + records External Source", async () => {

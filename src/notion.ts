@@ -237,12 +237,14 @@ export async function createNotionPage(
   client: Client,
   databaseId: string,
   properties: Record<string, unknown>,
-  children: object[]
+  children: object[],
+  iconUrl?: string
 ): Promise<string> {
   const response = await client.pages.create({
     parent: { database_id: databaseId },
     properties: properties as CreatePageParameters["properties"],
     children: children as CreatePageParameters["children"],
+    ...(iconUrl ? { icon: { type: "external" as const, external: { url: iconUrl } } } : {}),
   });
   return response.id;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CATEGORIES, normalizeCategory } from "../src/categories.js";
+import { CATEGORIES, normalizeCategory, getCategoryIconUrl } from "../src/categories.js";
 
 describe("CATEGORIES", () => {
   it("contains the 13 fixed categories in order", () => {
@@ -40,5 +40,23 @@ describe("normalizeCategory", () => {
 
   it("falls back to Other for an empty string", () => {
     expect(normalizeCategory("")).toBe("Other");
+  });
+});
+
+describe("getCategoryIconUrl", () => {
+  it("returns a distinct Phosphor CDN URL for every category", () => {
+    const urls = CATEGORIES.map((c) => getCategoryIconUrl(c));
+    expect(new Set(urls).size).toBe(CATEGORIES.length);
+    for (const url of urls) {
+      expect(url).toMatch(
+        /^https:\/\/cdn\.jsdelivr\.net\/npm\/@phosphor-icons\/core@2\/assets\/fill\/[a-z-]+-fill\.svg$/
+      );
+    }
+  });
+
+  it("returns the expected icon for Recipes/Food", () => {
+    expect(getCategoryIconUrl("Recipes/Food")).toBe(
+      "https://cdn.jsdelivr.net/npm/@phosphor-icons/core@2/assets/fill/bowl-food-fill.svg"
+    );
   });
 });
