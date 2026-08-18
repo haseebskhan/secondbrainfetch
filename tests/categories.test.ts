@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CATEGORIES, normalizeCategory, getCategoryIcon } from "../src/categories.js";
+import { CATEGORIES, normalizeCategory } from "../src/categories.js";
 
 describe("CATEGORIES", () => {
   it("contains the 13 fixed categories in order", () => {
@@ -40,16 +40,5 @@ describe("normalizeCategory", () => {
 
   it("falls back to Other for an empty string", () => {
     expect(normalizeCategory("")).toBe("Other");
-  });
-});
-
-describe("getCategoryIcon", () => {
-  it("returns a distinct icon for every category", () => {
-    const icons = CATEGORIES.map((c) => getCategoryIcon(c));
-    expect(icons).toHaveLength(CATEGORIES.length);
-    for (const icon of icons) {
-      expect(typeof icon).toBe("string");
-      expect(icon.length).toBeGreaterThan(0);
-    }
   });
 });

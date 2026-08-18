@@ -47,7 +47,7 @@ describe("buildPageProperties", () => {
 });
 
 describe("createNotionPage", () => {
-  it("calls pages.create with the database id, properties, children blocks, and icon", async () => {
+  it("calls pages.create with the database id, properties, and children blocks", async () => {
     const create = vi.fn().mockResolvedValue({ id: "page-123" });
     const fakeClient = { pages: { create } } as any;
     const children = [
@@ -62,8 +62,7 @@ describe("createNotionPage", () => {
       fakeClient,
       "db-456",
       { Title: { title: [{ text: { content: "X" } }] } },
-      children,
-      "⬛"
+      children
     );
 
     expect(pageId).toBe("page-123");
@@ -71,20 +70,6 @@ describe("createNotionPage", () => {
       parent: { database_id: "db-456" },
       properties: { Title: { title: [{ text: { content: "X" } }] } },
       children,
-      icon: { type: "emoji", emoji: "⬛" },
-    });
-  });
-
-  it("omits the icon field when none is given", async () => {
-    const create = vi.fn().mockResolvedValue({ id: "page-123" });
-    const fakeClient = { pages: { create } } as any;
-
-    await createNotionPage(fakeClient, "db-456", { Title: {} }, []);
-
-    expect(create).toHaveBeenCalledWith({
-      parent: { database_id: "db-456" },
-      properties: { Title: {} },
-      children: [],
     });
   });
 });

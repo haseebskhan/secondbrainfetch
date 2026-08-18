@@ -7,7 +7,6 @@ import type Anthropic from "@anthropic-ai/sdk";
 import ffmpegStaticPath from "ffmpeg-static";
 import type { PipelineResult } from "./types.js";
 import { buildPageProperties, createNotionPage, markdownToBlocks } from "./notion.js";
-import { getCategoryIcon } from "./categories.js";
 import { downloadMedia as downloadMediaFn, fetchMetadata as fetchMetadataFn } from "./download.js";
 import { extractAndTranscribe as extractAndTranscribeFn } from "./transcribe.js";
 import { extractFrames as extractFramesFn } from "./vision.js";
@@ -224,12 +223,11 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
       creator: result.uploader,
       externalSourceUrl: result.externalSourceUrl,
     });
-    const icon = getCategoryIcon(result.category ?? "Other");
 
     const children = markdownToBlocks(buildBodyMarkdown(result));
 
     try {
-      await writeNotionPage(deps.notionClient, deps.notionDatabaseId, properties, children, icon);
+      await writeNotionPage(deps.notionClient, deps.notionDatabaseId, properties, children);
     } catch (writeErr) {
       // Never silently drop a saved link: if the full write fails (e.g. an
       // unexpected 400 from a malformed field), retry once with a minimal
@@ -249,13 +247,7 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
 
       // If this also throws, let it propagate — the outer .catch() in
       // api/ingest.ts logs it, and there's nothing more we can safely do.
-      await writeNotionPage(
-        deps.notionClient,
-        deps.notionDatabaseId,
-        degradedProperties,
-        degradedChildren,
-        getCategoryIcon("Other")
-      );
+      await writeNotionPage(deps.notionClient, deps.notionDatabaseId, degradedProperties, degradedChildren);
 
       result = {
         ...result,

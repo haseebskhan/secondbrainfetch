@@ -93,14 +93,14 @@ describe("runPipeline", () => {
     );
   });
 
-  it("sets the category icon and Creator/External Source properties on the Notion page", async () => {
+  it("sets the Creator property on the Notion page, without an icon", async () => {
     const deps = baseDeps();
 
     await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
 
-    const [, , properties, , icon] = deps.createNotionPage.mock.calls[0];
-    expect(properties.Creator.rich_text[0].text.content).toBe("chefusername");
-    expect(icon).toBe("⬛"); // Recipes/Food icon
+    const call = deps.createNotionPage.mock.calls[0];
+    expect(call[2].Creator.rich_text[0].text.content).toBe("chefusername");
+    expect(call).toHaveLength(4);
   });
 
   it("fetches a linked external site found in the caption and passes its text + records External Source", async () => {

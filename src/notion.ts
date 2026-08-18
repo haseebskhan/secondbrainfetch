@@ -189,14 +189,12 @@ export async function createNotionPage(
   client: Client,
   databaseId: string,
   properties: Record<string, unknown>,
-  children: object[],
-  icon?: string
+  children: object[]
 ): Promise<string> {
   const response = await client.pages.create({
     parent: { database_id: databaseId },
     properties: properties as CreatePageParameters["properties"],
     children: children as CreatePageParameters["children"],
-    ...(icon ? { icon: { type: "emoji" as const, emoji: icon as any } } : {}),
   });
   return response.id;
 }
