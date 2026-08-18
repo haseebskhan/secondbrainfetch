@@ -19,15 +19,14 @@ export async function analyzeContent(
     `You are cataloging a saved Instagram reel/post for a personal knowledge base.`,
     `Transcript (verbatim, from audio): ${input.transcript ?? "(no audio / not available)"}`,
     `Pick "category" from exactly this list: ${CATEGORIES.join(", ")}.`,
-    `Respond with ONLY a JSON object: { "title": string, "visualDescription": string, "category": string, "tags": string[] }.`,
+    `Respond with ONLY a JSON object: { "title": string, "category": string, "tags": string[] }.`,
     `"title" is a short descriptive title, used only as a fallback if the actual Instagram post title/caption is unavailable.`,
-    `"visualDescription" is a detailed, essay-style writeup (several paragraphs) of what is shown visually in the frames — the setting, actions, on-screen text, people, objects, and any visual steps or demonstrations. Focus this field specifically on the visual layer; don't just restate the transcript here.`,
-    `"tags" is 2-5 free-form lowercase keywords.`,
+    `"tags" is 2-5 free-form lowercase keywords describing the content.`,
   ].join("\n");
 
   const response = await opts.anthropic.messages.create({
     model: "claude-opus-4-5",
-    max_tokens: 2048,
+    max_tokens: 512,
     messages: [
       {
         role: "user",
@@ -48,13 +47,8 @@ export async function analyzeContent(
     .trim();
   const parsed = JSON.parse(jsonText);
   const title = typeof parsed.title === "string" && parsed.title.trim() ? parsed.title : "Untitled";
-  const visualDescription =
-    typeof parsed.visualDescription === "string" && parsed.visualDescription.trim()
-      ? parsed.visualDescription
-      : "No visual description available.";
   return {
     title,
-    visualDescription,
     category: normalizeCategory(typeof parsed.category === "string" ? parsed.category : ""),
     tags: Array.isArray(parsed.tags) ? parsed.tags : [],
   };

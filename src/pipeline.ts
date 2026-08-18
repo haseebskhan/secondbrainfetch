@@ -38,7 +38,7 @@ function truncateTitle(title: string): string {
  * Composes the full page body as a constrained markdown document (headings,
  * label lines, plain paragraphs) that markdownToBlocks() converts into
  * proper Notion blocks — Source and metadata first, then the Zettelkasten
- * notes and visual description, with the raw transcript at the end.
+ * notes, with the raw transcript at the end.
  */
 function buildBodyMarkdown(result: PipelineResult): string {
   const sections: string[] = [];
@@ -56,10 +56,6 @@ function buildBodyMarkdown(result: PipelineResult): string {
 
   if (result.zettelkastenNotes) {
     sections.push(`## Zettelkasten Notes\n${result.zettelkastenNotes}`);
-  }
-
-  if (result.visualDescription) {
-    sections.push(`## Visual Description\n${result.visualDescription}`);
   }
 
   if (result.errorMessage) {
@@ -166,7 +162,6 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
           title: (reelTitle || analysis.title).trim(),
           reelDescription,
           uploader,
-          visualDescription: analysis.visualDescription,
           zettelkastenNotes,
           category: analysis.category,
           tags: analysis.tags,
@@ -198,7 +193,6 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
       sourceUrl: result.sourceUrl,
       category: result.category ?? "Other",
       tags: result.tags ?? [],
-      status: result.status,
     });
 
     const children = markdownToBlocks(buildBodyMarkdown(result));
@@ -217,7 +211,6 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
         sourceUrl,
         category: "Other",
         tags: [],
-        status: "Failed",
       });
       const degradedChildren = markdownToBlocks(
         `## Source\nURL: ${sourceUrl}\n\n## Error\nNotion write failed: ${message}`

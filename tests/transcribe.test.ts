@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import { extractAndTranscribe } from "../src/transcribe.js";
 
-vi.mock("node:fs", () => ({
-  createReadStream: vi.fn(() => ({} as any)),
-}));
+function fakeReadAudioFile() {
+  return vi.fn().mockResolvedValue(Buffer.from("fake-audio-bytes"));
+}
 
 describe("extractAndTranscribe", () => {
   it("extracts audio with ffmpeg and returns the Whisper transcript", async () => {
@@ -16,6 +16,7 @@ describe("extractAndTranscribe", () => {
       ffmpegPath: "/bin/ffmpeg",
       exec: exec as any,
       outDir: "/tmp/out",
+      readAudioFile: fakeReadAudioFile(),
     });
 
     expect(transcript).toBe("hello from the reel");
@@ -40,12 +41,13 @@ describe("extractAndTranscribe", () => {
       ffmpegPath: "/bin/ffmpeg",
       exec: exec as any,
       outDir: "/tmp/out",
+      readAudioFile: fakeReadAudioFile(),
     });
 
     expect(transcript).toBeNull();
   });
 
-  it("retries once on a transient Whisper API error before succeeding", async () => {
+  it("retries on a transient Whisper API error before succeeding", async () => {
     vi.useFakeTimers();
     const exec = vi.fn().mockResolvedValue({ stdout: "", stderr: "" });
     const create = vi
@@ -59,6 +61,7 @@ describe("extractAndTranscribe", () => {
       ffmpegPath: "/bin/ffmpeg",
       exec: exec as any,
       outDir: "/tmp/out",
+      readAudioFile: fakeReadAudioFile(),
     });
     await vi.runAllTimersAsync();
     const transcript = await promise;
@@ -80,11 +83,12 @@ describe("extractAndTranscribe", () => {
         ffmpegPath: "/bin/ffmpeg",
         exec: exec as any,
         outDir: "/tmp/out",
+        readAudioFile: fakeReadAudioFile(),
       })
     ).rejects.toThrow(/ECONNRESET/);
     await Promise.all([assertion, vi.runAllTimersAsync()]);
 
-    expect(create).toHaveBeenCalledTimes(2);
+    expect(create).toHaveBeenCalledTimes(3);
     vi.useRealTimers();
   });
 
@@ -98,6 +102,7 @@ describe("extractAndTranscribe", () => {
         ffmpegPath: "/bin/ffmpeg",
         exec: exec as any,
         outDir: "/tmp/out",
+        readAudioFile: fakeReadAudioFile(),
       })
     ).rejects.toThrow(/disk full/);
   });

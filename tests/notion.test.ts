@@ -8,7 +8,6 @@ describe("buildPageProperties", () => {
       sourceUrl: "https://www.instagram.com/reel/abc123/",
       category: "Recipes/Food",
       tags: ["pasta", "quick meals"],
-      status: "Done",
     });
 
     expect(props).toEqual({
@@ -17,7 +16,6 @@ describe("buildPageProperties", () => {
       Category: { select: { name: "Recipes/Food" } },
       Tags: { multi_select: [{ name: "pasta" }, { name: "quick meals" }] },
       "Date Saved": { date: { start: expect.any(String) } },
-      Status: { select: { name: "Done" } },
     });
   });
 });

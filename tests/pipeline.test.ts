@@ -26,7 +26,6 @@ function baseDeps(overrides: Partial<Record<string, any>> = {}) {
     extractFrames: vi.fn().mockResolvedValue([Buffer.from("img")]),
     analyzeContent: vi.fn().mockResolvedValue({
       title: "3-Ingredient Pasta (fallback)",
-      visualDescription: "A pan of pasta being tossed on a stovetop.",
       category: "Recipes/Food",
       tags: ["pasta"],
     }),
@@ -73,7 +72,7 @@ describe("runPipeline", () => {
     expect(properties.Title.title[0].text.content).toBe("3-Ingredient Pasta (fallback)");
   });
 
-  it("includes Source, Zettelkasten Notes, Visual Description, and Raw Transcript sections in the body", async () => {
+  it("includes Source, Zettelkasten Notes, and Raw Transcript sections in the body, with no Visual Description", async () => {
     const deps = baseDeps();
 
     await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
@@ -83,9 +82,9 @@ describe("runPipeline", () => {
     expect(text).toContain("Source");
     expect(text).toContain("chefusername");
     expect(text).toContain("A note about the pasta reel");
-    expect(text).toContain("A pan of pasta being tossed");
     expect(text).toContain("Raw Transcript");
     expect(text).toContain("today we're making pasta");
+    expect(text).not.toContain("Visual Description");
   });
 
   it("skips Zettelkasten note generation when there is no transcript", async () => {
@@ -203,8 +202,7 @@ describe("runPipeline", () => {
     const result = await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
 
     expect(createNotionPage).toHaveBeenCalledTimes(2);
-    const [, , degradedProperties, degradedChildren] = createNotionPage.mock.calls[1];
-    expect(degradedProperties.Status).toEqual({ select: { name: "Failed" } });
+    const [, , , degradedChildren] = createNotionPage.mock.calls[1];
     const degradedText = allText(degradedChildren);
     expect(degradedText).toContain("Notion write failed");
     expect(degradedText).not.toContain("today we're making pasta");

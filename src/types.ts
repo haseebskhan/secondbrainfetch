@@ -21,11 +21,12 @@ export interface ReelMetadata {
 
 export interface AnalysisResult {
   title: string;
-  visualDescription: string;
   category: Category;
   tags: string[];
 }
 
+// Tracks pipeline outcome internally (drives the Failed/Partial degraded-
+// retry logic) — no longer surfaced as a Notion property.
 export type PipelineStatus = "Done" | "Failed" | "Partial";
 
 export interface PipelineResult {
@@ -34,7 +35,6 @@ export interface PipelineResult {
   title?: string;
   reelDescription?: string;
   uploader?: string;
-  visualDescription?: string;
   zettelkastenNotes?: string;
   category?: Category;
   tags?: string[];

@@ -9,7 +9,6 @@ describe("analyzeContent", () => {
           type: "text",
           text: JSON.stringify({
             title: "3-Ingredient Pasta",
-            visualDescription: "A stovetop pasta being tossed with garlic and olive oil.",
             category: "Recipes/Food",
             tags: ["pasta", "quick meals"],
           }),
@@ -25,7 +24,6 @@ describe("analyzeContent", () => {
 
     expect(result).toEqual({
       title: "3-Ingredient Pasta",
-      visualDescription: "A stovetop pasta being tossed with garlic and olive oil.",
       category: "Recipes/Food",
       tags: ["pasta", "quick meals"],
     });
@@ -38,7 +36,6 @@ describe("analyzeContent", () => {
           type: "text",
           text: JSON.stringify({
             title: "Random Clip",
-            visualDescription: "Unclear content.",
             category: "Cryptocurrency",
             tags: [],
           }),
@@ -64,7 +61,6 @@ describe("analyzeContent", () => {
             "```json\n" +
             JSON.stringify({
               title: "Fenced Response",
-              visualDescription: "Claude wrapped this in a code fence.",
               category: "Other",
               tags: [],
             }) +

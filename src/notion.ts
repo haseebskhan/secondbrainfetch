@@ -1,6 +1,6 @@
 import type { Client } from "@notionhq/client";
 import type { CreatePageParameters } from "@notionhq/client/build/src/api-endpoints.js";
-import type { Category, PipelineStatus } from "./types.js";
+import type { Category } from "./types.js";
 
 /**
  * Notion's rich_text content field caps at 2000 characters per block. Splits
@@ -116,7 +116,6 @@ export function buildPageProperties(data: {
   sourceUrl: string;
   category: Category;
   tags: string[];
-  status: PipelineStatus;
 }): Record<string, unknown> {
   return {
     Title: { title: [{ text: { content: data.title } }] },
@@ -124,7 +123,6 @@ export function buildPageProperties(data: {
     Category: { select: { name: data.category } },
     Tags: { multi_select: data.tags.map((t) => ({ name: t })) },
     "Date Saved": { date: { start: new Date().toISOString() } },
-    Status: { select: { name: data.status } },
   };
 }
 
