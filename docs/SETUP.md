@@ -16,6 +16,7 @@
    - `ANTHROPIC_API_KEY`
    - `NOTION_TOKEN`
    - `NOTION_DATABASE_ID`
+   - `YT_DLP_PATH` — `./bin/yt-dlp`
 4. Under Project Settings → Functions, enable **Fluid Compute** (required for `waitUntil` to keep running after the response is sent).
 5. Deploy. Note the deployed URL, e.g. `https://your-project.vercel.app`.
 6. Your webhook endpoint is `https://your-project.vercel.app/api/ingest`.
