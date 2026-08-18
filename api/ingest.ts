@@ -34,6 +34,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const url = (req.body as { url?: string } | undefined)?.url;
+  console.log(
+    "DEBUG url check:",
+    JSON.stringify({
+      rawBody: req.body,
+      bodyType: typeof req.body,
+      urlValue: url,
+      urlType: typeof url,
+    })
+  );
   if (!url || typeof url !== "string") {
     res.status(400).json({ error: "Missing or invalid 'url' field" });
     return;
@@ -47,7 +56,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
   if (parsedUrl.hostname !== "instagram.com" && !parsedUrl.hostname.endsWith(".instagram.com")) {
-    res.status(400).json({ error: "Missing or invalid 'url' field" });
+    res.status(400).json({ error: "Missing or invalid 'url' field", hostname: parsedUrl.hostname });
     return;
   }
 
