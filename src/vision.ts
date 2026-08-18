@@ -34,7 +34,13 @@ export async function extractFrames(
   const frames: Buffer[] = [];
   for (let i = 1; i <= count; i++) {
     const num = String(i).padStart(2, "0");
-    frames.push(await readFile(`${outDir}/frame-${num}.jpg`));
+    try {
+      frames.push(await readFile(`${outDir}/frame-${num}.jpg`));
+    } catch {
+      // Fewer frames were produced than requested (e.g. a short video) —
+      // stop here and return whatever was successfully extracted.
+      break;
+    }
   }
   return frames;
 }

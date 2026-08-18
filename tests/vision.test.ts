@@ -45,4 +45,24 @@ describe("extractFrames", () => {
 
     expect(frames).toHaveLength(3);
   });
+
+  it("returns fewer frames than requested when some are missing (e.g. a short video)", async () => {
+    const exec = vi.fn().mockResolvedValue({ stdout: "", stderr: "" });
+    const readFile = vi
+      .fn()
+      .mockResolvedValueOnce(Buffer.from("frame-1"))
+      .mockResolvedValueOnce(Buffer.from("frame-2"))
+      .mockRejectedValueOnce(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
+
+    const frames = await extractFrames("/tmp/out/reel.mp4", {
+      ffmpegPath: "/bin/ffmpeg",
+      exec: exec as any,
+      outDir: "/tmp/out",
+      readFile: readFile as any,
+      count: 3,
+    });
+
+    expect(readFile).toHaveBeenCalledTimes(3);
+    expect(frames).toHaveLength(2);
+  });
 });
