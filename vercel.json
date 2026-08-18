@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "api/ingest.ts": {
+      "maxDuration": 300,
+      "includeFiles": "bin/**"
+    }
+  }
+}
