@@ -2,7 +2,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { waitUntil } from "@vercel/functions";
 import { Client } from "@notionhq/client";
-import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { isValidWebhookSecret } from "../src/auth.js";
 import { runPipeline } from "../src/pipeline.js";
@@ -39,12 +38,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const notionClient = new Client({ auth: process.env.NOTION_TOKEN });
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const openaiApiKey = process.env.OPENAI_API_KEY ?? "";
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const notionDatabaseId = process.env.NOTION_DATABASE_ID ?? "";
 
   waitUntil(
-    runPipeline(url, { notionClient, notionDatabaseId, openai, anthropic }).catch((err) => {
+    runPipeline(url, { notionClient, notionDatabaseId, openaiApiKey, anthropic }).catch((err) => {
       console.error("Pipeline failed unexpectedly:", err);
     })
   );

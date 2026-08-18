@@ -3,7 +3,6 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { mkdir, rm, readFile } from "node:fs/promises";
 import type { Client } from "@notionhq/client";
-import type OpenAI from "openai";
 import type Anthropic from "@anthropic-ai/sdk";
 import ffmpegStaticPath from "ffmpeg-static";
 import type { PipelineResult } from "./types.js";
@@ -26,7 +25,7 @@ export interface PipelineDeps {
   createNotionPage?: typeof createNotionPage;
   notionClient: Client;
   notionDatabaseId: string;
-  openai: OpenAI;
+  openaiApiKey: string;
   anthropic: Anthropic;
 }
 
@@ -117,7 +116,7 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
           // from being captured and used for analysis.
           try {
             transcript = await extractAndTranscribe(media.filePath, {
-              openai: deps.openai,
+              openaiApiKey: deps.openaiApiKey,
               ffmpegPath,
               outDir: invocationDir,
             });

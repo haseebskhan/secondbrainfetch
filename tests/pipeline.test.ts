@@ -35,7 +35,7 @@ function baseDeps(overrides: Partial<Record<string, any>> = {}) {
     createNotionPage: vi.fn().mockResolvedValue("page-1"),
     notionClient: {} as any,
     notionDatabaseId: "db-1",
-    openai: {} as any,
+    openaiApiKey: "sk-test",
     anthropic: {} as any,
     ...overrides,
   };
