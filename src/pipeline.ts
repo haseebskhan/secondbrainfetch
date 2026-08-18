@@ -5,7 +5,7 @@ import { mkdir, rm, readFile } from "node:fs/promises";
 import type { Client } from "@notionhq/client";
 import type Anthropic from "@anthropic-ai/sdk";
 import ffmpegStaticPath from "ffmpeg-static";
-import type { PipelineResult } from "./types.js";
+import type { PipelineResult, RelatedNote } from "./types.js";
 import { buildPageProperties, createNotionPage, markdownToBlocks } from "./notion.js";
 import { downloadMedia as downloadMediaFn, fetchMetadata as fetchMetadataFn } from "./download.js";
 import { extractAndTranscribe as extractAndTranscribeFn } from "./transcribe.js";
@@ -223,7 +223,7 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
           console.error("Key item extraction failed:", keyItemsErr);
         }
 
-        let relatedNotes: { title: string; url: string }[] = [];
+        let relatedNotes: RelatedNote[] = [];
         try {
           relatedNotes = await findRelatedNotes(deps.notionClient, deps.notionDatabaseId, {
             category: analysis.category,
@@ -277,6 +277,7 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
       tags: result.tags ?? [],
       creator: result.uploader,
       externalSourceUrl: result.externalSourceUrl,
+      relatedPageIds: result.relatedNotes?.map((n) => n.id),
     });
 
     const children = markdownToBlocks(buildBodyMarkdown(result));

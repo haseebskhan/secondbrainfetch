@@ -234,7 +234,9 @@ describe("runPipeline", () => {
     const deps = baseDeps({
       findRelatedNotes: vi
         .fn()
-        .mockResolvedValue([{ title: "Earlier Pasta Reel", url: "https://notion.so/earlier" }]),
+        .mockResolvedValue([
+          { id: "page-earlier", title: "Earlier Pasta Reel", url: "https://notion.so/earlier" },
+        ]),
     });
 
     await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
@@ -244,6 +246,30 @@ describe("runPipeline", () => {
     expect(text).toContain("Related Notes");
     expect(text).toContain("Earlier Pasta Reel");
     expect(text).toContain("https://notion.so/earlier");
+  });
+
+  it("sets the Related Notes relation property with the ids findRelatedNotes returns", async () => {
+    const deps = baseDeps({
+      findRelatedNotes: vi
+        .fn()
+        .mockResolvedValue([
+          { id: "page-earlier", title: "Earlier Pasta Reel", url: "https://notion.so/earlier" },
+        ]),
+    });
+
+    await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
+
+    const properties = deps.createNotionPage.mock.calls[0][2];
+    expect(properties["Related Notes"]).toEqual({ relation: [{ id: "page-earlier" }] });
+  });
+
+  it("omits the Related Notes relation property when nothing is related", async () => {
+    const deps = baseDeps();
+
+    await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
+
+    const properties = deps.createNotionPage.mock.calls[0][2];
+    expect(properties["Related Notes"]).toBeUndefined();
   });
 
   it("calls findRelatedNotes with the category and tags Claude picked", async () => {

@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
 import { findRelatedNotes } from "../src/relatedNotes.js";
 
-function page(title: string, url: string, tags: string[]) {
+function page(id: string, title: string, url: string, tags: string[]) {
   return {
+    id,
     url,
     properties: {
       Title: { title: [{ plain_text: title }] },
@@ -12,12 +13,12 @@ function page(title: string, url: string, tags: string[]) {
 }
 
 describe("findRelatedNotes", () => {
-  it("ranks same-category pages by tag overlap, excluding pages with no overlap", async () => {
+  it("ranks same-category pages by tag overlap, excluding pages with no overlap, and includes page ids", async () => {
     const query = vi.fn().mockResolvedValue({
       results: [
-        page("No overlap", "https://notion.so/a", ["unrelated"]),
-        page("One shared tag", "https://notion.so/b", ["pasta"]),
-        page("Two shared tags", "https://notion.so/c", ["pasta", "quick meals"]),
+        page("page-a", "No overlap", "https://notion.so/a", ["unrelated"]),
+        page("page-b", "One shared tag", "https://notion.so/b", ["pasta"]),
+        page("page-c", "Two shared tags", "https://notion.so/c", ["pasta", "quick meals"]),
       ],
     });
     const fakeClient = { databases: { query } } as any;
@@ -28,8 +29,8 @@ describe("findRelatedNotes", () => {
     });
 
     expect(related).toEqual([
-      { title: "Two shared tags", url: "https://notion.so/c" },
-      { title: "One shared tag", url: "https://notion.so/b" },
+      { id: "page-c", title: "Two shared tags", url: "https://notion.so/c" },
+      { id: "page-b", title: "One shared tag", url: "https://notion.so/b" },
     ]);
     expect(query).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -42,9 +43,9 @@ describe("findRelatedNotes", () => {
   it("respects the limit option", async () => {
     const query = vi.fn().mockResolvedValue({
       results: [
-        page("A", "https://notion.so/a", ["pasta"]),
-        page("B", "https://notion.so/b", ["pasta"]),
-        page("C", "https://notion.so/c", ["pasta"]),
+        page("page-a", "A", "https://notion.so/a", ["pasta"]),
+        page("page-b", "B", "https://notion.so/b", ["pasta"]),
+        page("page-c", "C", "https://notion.so/c", ["pasta"]),
       ],
     });
     const fakeClient = { databases: { query } } as any;
@@ -61,7 +62,7 @@ describe("findRelatedNotes", () => {
 
   it("returns an empty array when nothing overlaps", async () => {
     const query = vi.fn().mockResolvedValue({
-      results: [page("Unrelated", "https://notion.so/a", ["other"])],
+      results: [page("page-a", "Unrelated", "https://notion.so/a", ["other"])],
     });
     const fakeClient = { databases: { query } } as any;
 

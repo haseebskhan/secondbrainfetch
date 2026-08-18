@@ -44,6 +44,30 @@ describe("buildPageProperties", () => {
     expect(props.Creator).toBeUndefined();
     expect(props["External Source"]).toBeUndefined();
   });
+
+  it("includes the Related Notes relation property when related page ids are provided", () => {
+    const props = buildPageProperties({
+      title: "3-Ingredient Pasta",
+      sourceUrl: "https://www.instagram.com/reel/abc123/",
+      category: "Recipes/Food",
+      tags: [],
+      relatedPageIds: ["page-a", "page-b"],
+    });
+
+    expect(props["Related Notes"]).toEqual({ relation: [{ id: "page-a" }, { id: "page-b" }] });
+  });
+
+  it("omits the Related Notes relation property when there are no related pages", () => {
+    const props = buildPageProperties({
+      title: "3-Ingredient Pasta",
+      sourceUrl: "https://www.instagram.com/reel/abc123/",
+      category: "Recipes/Food",
+      tags: [],
+      relatedPageIds: [],
+    });
+
+    expect(props["Related Notes"]).toBeUndefined();
+  });
 });
 
 describe("createNotionPage", () => {

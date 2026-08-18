@@ -2,6 +2,7 @@ import type { Client } from "@notionhq/client";
 import type { Category } from "./types.js";
 
 export interface RelatedNote {
+  id: string;
   title: string;
   url: string;
 }
@@ -31,10 +32,10 @@ export async function findRelatedNotes(
       const pageTags: string[] = (page.properties?.Tags?.multi_select ?? []).map((t: any) => t.name);
       const overlap = pageTags.filter((t) => data.tags.includes(t)).length;
       const title = page.properties?.Title?.title?.[0]?.plain_text ?? "Untitled";
-      return { title, url: page.url as string, overlap };
+      return { id: page.id as string, title, url: page.url as string, overlap };
     })
     .filter((entry) => entry.overlap > 0)
     .sort((a, b) => b.overlap - a.overlap)
     .slice(0, limit)
-    .map(({ title, url }) => ({ title, url }));
+    .map(({ id, title, url }) => ({ id, title, url }));
 }

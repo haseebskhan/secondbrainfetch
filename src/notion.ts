@@ -168,6 +168,7 @@ export function buildPageProperties(data: {
   tags: string[];
   creator?: string;
   externalSourceUrl?: string;
+  relatedPageIds?: string[];
 }): Record<string, unknown> {
   const properties: Record<string, unknown> = {
     Title: { title: [{ text: { content: data.title } }] },
@@ -181,6 +182,9 @@ export function buildPageProperties(data: {
   }
   if (data.externalSourceUrl) {
     properties["External Source"] = { url: data.externalSourceUrl };
+  }
+  if (data.relatedPageIds && data.relatedPageIds.length > 0) {
+    properties["Related Notes"] = { relation: data.relatedPageIds.map((id) => ({ id })) };
   }
   return properties;
 }

@@ -36,6 +36,7 @@ export interface AnalysisResult {
 export type PipelineStatus = "Done" | "Failed" | "Partial" | "Duplicate";
 
 export interface RelatedNote {
+  id: string;
   title: string;
   url: string;
 }
