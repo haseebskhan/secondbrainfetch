@@ -15,7 +15,8 @@ export interface DownloadResult {
 
 export interface AnalysisResult {
   title: string;
-  summary: string;
+  visualDescription: string;
+  ideas: string;
   category: Category;
   tags: string[];
 }
@@ -26,7 +27,8 @@ export interface PipelineResult {
   status: PipelineStatus;
   sourceUrl: string;
   title?: string;
-  summary?: string;
+  visualDescription?: string;
+  ideas?: string;
   category?: Category;
   tags?: string[];
   transcript?: string | null;

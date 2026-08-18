@@ -45,6 +45,49 @@ describe("extractAndTranscribe", () => {
     expect(transcript).toBeNull();
   });
 
+  it("retries once on a transient Whisper API error before succeeding", async () => {
+    vi.useFakeTimers();
+    const exec = vi.fn().mockResolvedValue({ stdout: "", stderr: "" });
+    const create = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("ECONNRESET"))
+      .mockResolvedValueOnce({ text: "recovered transcript" });
+    const fakeOpenai = { audio: { transcriptions: { create } } } as any;
+
+    const promise = extractAndTranscribe("/tmp/out/reel.mp4", {
+      openai: fakeOpenai,
+      ffmpegPath: "/bin/ffmpeg",
+      exec: exec as any,
+      outDir: "/tmp/out",
+    });
+    await vi.runAllTimersAsync();
+    const transcript = await promise;
+
+    expect(transcript).toBe("recovered transcript");
+    expect(create).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
+  it("throws after exhausting retries on persistent Whisper API errors", async () => {
+    vi.useFakeTimers();
+    const exec = vi.fn().mockResolvedValue({ stdout: "", stderr: "" });
+    const create = vi.fn().mockRejectedValue(new Error("ECONNRESET"));
+    const fakeOpenai = { audio: { transcriptions: { create } } } as any;
+
+    const assertion = expect(
+      extractAndTranscribe("/tmp/out/reel.mp4", {
+        openai: fakeOpenai,
+        ffmpegPath: "/bin/ffmpeg",
+        exec: exec as any,
+        outDir: "/tmp/out",
+      })
+    ).rejects.toThrow(/ECONNRESET/);
+    await Promise.all([assertion, vi.runAllTimersAsync()]);
+
+    expect(create).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
   it("propagates other ffmpeg errors", async () => {
     const exec = vi.fn().mockRejectedValue(new Error("disk full"));
     const fakeOpenai = { audio: { transcriptions: { create: vi.fn() } } } as any;

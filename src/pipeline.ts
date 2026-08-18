@@ -86,7 +86,8 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
           status: "Done",
           sourceUrl,
           title: analysis.title,
-          summary: analysis.summary,
+          visualDescription: analysis.visualDescription,
+          ideas: analysis.ideas,
           category: analysis.category,
           tags: analysis.tags,
           transcript,
@@ -119,8 +120,9 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
 
     const bodyParagraphs = [
       `Source: ${result.sourceUrl}`,
-      result.summary ? `Summary: ${result.summary}` : undefined,
       result.transcript ? `Transcript: ${result.transcript}` : undefined,
+      result.visualDescription ? `Visual Description: ${result.visualDescription}` : undefined,
+      result.ideas ? `New Ideas: ${result.ideas}` : undefined,
       result.errorMessage ? `Error: ${result.errorMessage}` : undefined,
     ]
       .filter((p): p is string => Boolean(p))

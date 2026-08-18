@@ -12,7 +12,8 @@ function baseDeps(overrides: Partial<Record<string, any>> = {}) {
     extractFrames: vi.fn().mockResolvedValue([Buffer.from("img")]),
     analyzeContent: vi.fn().mockResolvedValue({
       title: "3-Ingredient Pasta",
-      summary: "A quick pasta recipe.",
+      visualDescription: "A pan of pasta being tossed on a stovetop.",
+      ideas: "Try a one-pot variation to cut down on cleanup.",
       category: "Recipes/Food",
       tags: ["pasta"],
     }),

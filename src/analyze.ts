@@ -16,12 +16,13 @@ export async function analyzeContent(
   }));
 
   const prompt = [
-    `You are cataloging a saved Instagram reel/post for a personal knowledge base. The person saving this wants to reference and reuse the ideas in it later without rewatching the video.`,
-    `Transcript: ${input.transcript ?? "(no audio / not available)"}`,
+    `You are cataloging a saved Instagram reel/post for a personal knowledge base. The person saving this wants detailed reference notes plus fresh thinking inspired by the content, not just a rehash.`,
+    `Transcript (verbatim, from audio): ${input.transcript ?? "(no audio / not available)"}`,
     `Pick "category" from exactly this list: ${CATEGORIES.join(", ")}.`,
-    `Respond with ONLY a JSON object: { "title": string, "summary": string, "category": string, "tags": string[] }.`,
+    `Respond with ONLY a JSON object: { "title": string, "visualDescription": string, "ideas": string, "category": string, "tags": string[] }.`,
     `"title" is a short descriptive title.`,
-    `"summary" is a detailed, essay-style writeup (several paragraphs, not a couple of sentences) that captures the substance of the content: the specific ideas, steps, arguments, tips, or claims made, in enough depth that the reader can actually use them without watching the original. Write it as standalone reference notes, not a teaser. Do not pad it with filler — every paragraph should carry real content from the source.`,
+    `"visualDescription" is a detailed, essay-style writeup (several paragraphs) of what is shown visually in the frames — the setting, actions, on-screen text, people, objects, and any visual steps or demonstrations. Combine this with what the transcript says to describe the full content, but focus this field specifically on the visual layer; don't just restate the transcript here.`,
+    `"ideas" is a separate essay-style writeup (several paragraphs) of NEW ideas, extensions, applications, or angles inspired by this content — going beyond what was said or shown. Build on the source material with original thinking: what could someone do with this, what's a related idea it suggests, what's a deeper or more interesting take. This is not a summary of the content — it's your own generative thinking sparked by it.`,
     `"tags" is 2-5 free-form lowercase keywords.`,
   ].join("\n");
 
@@ -48,13 +49,18 @@ export async function analyzeContent(
     .trim();
   const parsed = JSON.parse(jsonText);
   const title = typeof parsed.title === "string" && parsed.title.trim() ? parsed.title : "Untitled";
-  const summary =
-    typeof parsed.summary === "string" && parsed.summary.trim()
-      ? parsed.summary
-      : "No summary available.";
+  const visualDescription =
+    typeof parsed.visualDescription === "string" && parsed.visualDescription.trim()
+      ? parsed.visualDescription
+      : "No visual description available.";
+  const ideas =
+    typeof parsed.ideas === "string" && parsed.ideas.trim()
+      ? parsed.ideas
+      : "No ideas generated.";
   return {
     title,
-    summary,
+    visualDescription,
+    ideas,
     category: normalizeCategory(typeof parsed.category === "string" ? parsed.category : ""),
     tags: Array.isArray(parsed.tags) ? parsed.tags : [],
   };
