@@ -1,4 +1,5 @@
 import type { Client } from "@notionhq/client";
+import type { CreatePageParameters } from "@notionhq/client/build/src/api-endpoints.js";
 import type { Category, PipelineStatus } from "./types.js";
 
 export function buildPageProperties(data: {
@@ -26,7 +27,7 @@ export async function createNotionPage(
 ): Promise<string> {
   const response = await client.pages.create({
     parent: { database_id: databaseId },
-    properties,
+    properties: properties as CreatePageParameters["properties"],
     children: bodyParagraphs.map((text) => ({
       object: "block" as const,
       type: "paragraph" as const,
