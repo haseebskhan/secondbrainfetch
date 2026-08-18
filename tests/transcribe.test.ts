@@ -39,7 +39,7 @@ describe("extractAndTranscribe", () => {
       "/tmp/out/reel.mp3",
     ]);
     expect(fetchFn).toHaveBeenCalledWith(
-      "https://api.openai.com/v1/audio/transcriptions",
+      "https://api.openai.com/v1/audio/translations",
       expect.objectContaining({
         method: "POST",
         headers: { Authorization: "Bearer sk-test" },

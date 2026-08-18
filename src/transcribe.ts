@@ -47,7 +47,10 @@ export async function extractAndTranscribe(
       formData.append("file", new Blob([audioBuffer], { type: "audio/mpeg" }), "audio.mp3");
       formData.append("model", "whisper-1");
 
-      const response = await fetchFn("https://api.openai.com/v1/audio/transcriptions", {
+      // The /translations endpoint (vs. /transcriptions) always outputs
+      // English regardless of the spoken language — the archive should be
+      // consistently readable/searchable in one language.
+      const response = await fetchFn("https://api.openai.com/v1/audio/translations", {
         method: "POST",
         headers: { Authorization: `Bearer ${opts.openaiApiKey}` },
         body: formData,
