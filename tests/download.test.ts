@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { downloadMedia } from "../src/download.js";
+import { downloadMedia, fetchMetadata } from "../src/download.js";
 
 describe("downloadMedia", () => {
   it("returns the printed file path and marks video files as video", async () => {
@@ -45,5 +45,58 @@ describe("downloadMedia", () => {
         exec: exec as any,
       })
     ).rejects.toThrow(/Failed to download media/);
+  });
+});
+
+describe("fetchMetadata", () => {
+  it("parses title, description, and uploader from yt-dlp's JSON dump", async () => {
+    const exec = vi.fn().mockResolvedValue({
+      stdout: JSON.stringify({
+        title: "3-Ingredient Pasta",
+        description: "Quick weeknight pasta recipe #cooking",
+        uploader: "chefusername",
+      }) + "\n",
+      stderr: "",
+    });
+
+    const metadata = await fetchMetadata("https://www.instagram.com/reel/abc123/", {
+      ytDlpPath: "/bin/yt-dlp",
+      exec: exec as any,
+    });
+
+    expect(metadata).toEqual({
+      title: "3-Ingredient Pasta",
+      description: "Quick weeknight pasta recipe #cooking",
+      uploader: "chefusername",
+    });
+    expect(exec).toHaveBeenCalledWith("/bin/yt-dlp", [
+      "--no-playlist",
+      "--skip-download",
+      "-j",
+      "--",
+      "https://www.instagram.com/reel/abc123/",
+    ]);
+  });
+
+  it("defaults missing fields to empty strings", async () => {
+    const exec = vi.fn().mockResolvedValue({ stdout: "{}\n", stderr: "" });
+
+    const metadata = await fetchMetadata("https://www.instagram.com/reel/abc123/", {
+      ytDlpPath: "/bin/yt-dlp",
+      exec: exec as any,
+    });
+
+    expect(metadata).toEqual({ title: "", description: "", uploader: "" });
+  });
+
+  it("throws a descriptive error when yt-dlp fails", async () => {
+    const exec = vi.fn().mockRejectedValue(new Error("private account"));
+
+    await expect(
+      fetchMetadata("https://www.instagram.com/reel/bad/", {
+        ytDlpPath: "/bin/yt-dlp",
+        exec: exec as any,
+      })
+    ).rejects.toThrow(/Failed to fetch metadata/);
   });
 });

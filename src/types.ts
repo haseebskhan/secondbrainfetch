@@ -13,10 +13,15 @@ export interface DownloadResult {
   isVideo: boolean;
 }
 
+export interface ReelMetadata {
+  title: string;
+  description: string;
+  uploader: string;
+}
+
 export interface AnalysisResult {
   title: string;
   visualDescription: string;
-  ideas: string;
   category: Category;
   tags: string[];
 }
@@ -27,8 +32,10 @@ export interface PipelineResult {
   status: PipelineStatus;
   sourceUrl: string;
   title?: string;
+  reelDescription?: string;
+  uploader?: string;
   visualDescription?: string;
-  ideas?: string;
+  zettelkastenNotes?: string;
   category?: Category;
   tags?: string[];
   transcript?: string | null;

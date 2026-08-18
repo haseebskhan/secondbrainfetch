@@ -5,18 +5,34 @@ import { randomUUID } from "node:crypto";
 import { writeFile, rm } from "node:fs/promises";
 import { runPipeline } from "../src/pipeline.js";
 
+function blockText(block: any): string {
+  const key = block.type;
+  return (block[key]?.rich_text ?? []).map((rt: any) => rt.text.content).join("");
+}
+
+function allText(blocks: any[]): string {
+  return blocks.map(blockText).join("\n");
+}
+
 function baseDeps(overrides: Partial<Record<string, any>> = {}) {
   return {
     downloadMedia: vi.fn().mockResolvedValue({ filePath: "/tmp/out/reel.mp4", isVideo: true }),
+    fetchMetadata: vi.fn().mockResolvedValue({
+      title: "3-Ingredient Pasta",
+      description: "A quick weeknight pasta recipe.",
+      uploader: "chefusername",
+    }),
     extractAndTranscribe: vi.fn().mockResolvedValue("today we're making pasta"),
     extractFrames: vi.fn().mockResolvedValue([Buffer.from("img")]),
     analyzeContent: vi.fn().mockResolvedValue({
-      title: "3-Ingredient Pasta",
+      title: "3-Ingredient Pasta (fallback)",
       visualDescription: "A pan of pasta being tossed on a stovetop.",
-      ideas: "Try a one-pot variation to cut down on cleanup.",
       category: "Recipes/Food",
       tags: ["pasta"],
     }),
+    buildZettelkastenNotes: vi
+      .fn()
+      .mockResolvedValue("### 1. Literature Note\nA note about the pasta reel."),
     createNotionPage: vi.fn().mockResolvedValue("page-1"),
     notionClient: {} as any,
     notionDatabaseId: "db-1",
@@ -35,6 +51,54 @@ describe("runPipeline", () => {
     expect(result.status).toBe("Done");
     expect(result.category).toBe("Recipes/Food");
     expect(deps.createNotionPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the real Instagram title as the page title when metadata succeeds", async () => {
+    const deps = baseDeps();
+
+    await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
+
+    const properties = deps.createNotionPage.mock.calls[0][2];
+    expect(properties.Title.title[0].text.content).toBe("3-Ingredient Pasta");
+  });
+
+  it("falls back to Claude's title when metadata fetch fails", async () => {
+    const deps = baseDeps({
+      fetchMetadata: vi.fn().mockRejectedValue(new Error("private account")),
+    });
+
+    await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
+
+    const properties = deps.createNotionPage.mock.calls[0][2];
+    expect(properties.Title.title[0].text.content).toBe("3-Ingredient Pasta (fallback)");
+  });
+
+  it("includes Source, Zettelkasten Notes, Visual Description, and Raw Transcript sections in the body", async () => {
+    const deps = baseDeps();
+
+    await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
+
+    const children = deps.createNotionPage.mock.calls[0][3];
+    const text = allText(children);
+    expect(text).toContain("Source");
+    expect(text).toContain("chefusername");
+    expect(text).toContain("A note about the pasta reel");
+    expect(text).toContain("A pan of pasta being tossed");
+    expect(text).toContain("Raw Transcript");
+    expect(text).toContain("today we're making pasta");
+  });
+
+  it("skips Zettelkasten note generation when there is no transcript", async () => {
+    const deps = baseDeps({
+      extractAndTranscribe: vi.fn().mockResolvedValue(null),
+    });
+
+    await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
+
+    expect(deps.buildZettelkastenNotes).not.toHaveBeenCalled();
+    const children = deps.createNotionPage.mock.calls[0][3];
+    const text = allText(children);
+    expect(text).not.toContain("Zettelkasten Notes");
   });
 
   it("skips ffmpeg-based transcription/frame extraction and reads the image directly for image posts", async () => {
@@ -113,7 +177,7 @@ describe("runPipeline", () => {
     expect(result.status).toBe("Done");
   });
 
-  it("chunks a long transcript into multiple body paragraphs to stay under Notion's 2000-char limit", async () => {
+  it("chunks a long transcript into multiple body blocks to stay under Notion's 2000-char limit", async () => {
     const longTranscript = "word ".repeat(500); // ~2500 chars
     const deps = baseDeps({
       extractAndTranscribe: vi.fn().mockResolvedValue(longTranscript),
@@ -121,11 +185,11 @@ describe("runPipeline", () => {
 
     await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
 
-    const bodyParagraphs = deps.createNotionPage.mock.calls[0][3] as string[];
-    const transcriptParagraphs = bodyParagraphs.filter((p) => p.includes("word"));
-    expect(transcriptParagraphs.length).toBeGreaterThan(1);
-    for (const p of bodyParagraphs) {
-      expect(p.length).toBeLessThanOrEqual(1900);
+    const children = deps.createNotionPage.mock.calls[0][3];
+    const transcriptBlocks = children.filter((b: any) => blockText(b).includes("word"));
+    expect(transcriptBlocks.length).toBeGreaterThan(1);
+    for (const block of children) {
+      expect(blockText(block).length).toBeLessThanOrEqual(1900);
     }
   });
 
@@ -139,10 +203,11 @@ describe("runPipeline", () => {
     const result = await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
 
     expect(createNotionPage).toHaveBeenCalledTimes(2);
-    const [, , degradedProperties, degradedBody] = createNotionPage.mock.calls[1];
+    const [, , degradedProperties, degradedChildren] = createNotionPage.mock.calls[1];
     expect(degradedProperties.Status).toEqual({ select: { name: "Failed" } });
-    expect(degradedBody.some((p: string) => p.includes("Notion write failed"))).toBe(true);
-    expect(degradedBody.some((p: string) => p.includes("Transcript"))).toBe(false);
+    const degradedText = allText(degradedChildren);
+    expect(degradedText).toContain("Notion write failed");
+    expect(degradedText).not.toContain("today we're making pasta");
     expect(result.status).toBe("Failed");
   });
 

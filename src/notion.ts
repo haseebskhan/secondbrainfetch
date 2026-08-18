@@ -22,6 +22,95 @@ export function chunkText(text: string, maxLen = 1900): string[] {
   return chunks;
 }
 
+type RichText = { type: "text"; text: { content: string }; annotations?: { bold: boolean } };
+type NotionBlock =
+  | { object: "block"; type: "heading_2"; heading_2: { rich_text: RichText[] } }
+  | { object: "block"; type: "heading_3"; heading_3: { rich_text: RichText[] } }
+  | { object: "block"; type: "bulleted_list_item"; bulleted_list_item: { rich_text: RichText[] } }
+  | { object: "block"; type: "paragraph"; paragraph: { rich_text: RichText[] } };
+
+const LABEL_LINE = /^([A-Za-z][A-Za-z0-9 /]{1,40}):\s*(.*)$/;
+
+function paragraphBlocks(text: string): NotionBlock[] {
+  return chunkText(text).map((chunk) => ({
+    object: "block" as const,
+    type: "paragraph" as const,
+    paragraph: { rich_text: [{ type: "text" as const, text: { content: chunk } }] },
+  }));
+}
+
+function labelParagraphBlocks(label: string, rest: string): NotionBlock[] {
+  const chunks = rest ? chunkText(rest) : [""];
+  const [first, ...restChunks] = chunks;
+  const firstBlock: NotionBlock = {
+    object: "block",
+    type: "paragraph",
+    paragraph: {
+      rich_text: [
+        { type: "text", text: { content: `${label}: ` }, annotations: { bold: true } },
+        ...(first ? [{ type: "text" as const, text: { content: first } }] : []),
+      ],
+    },
+  };
+  return [firstBlock, ...restChunks.map((chunk) => paragraphBlocks(chunk)[0])];
+}
+
+/**
+ * Converts a constrained markdown subset (## / ### headings, "- "/"* "
+ * bullets, "Label: text" bold-label lines, and plain paragraphs) into Notion
+ * blocks. Blank lines are skipped; long text is chunked to stay under
+ * Notion's per-block rich_text limit.
+ */
+export function markdownToBlocks(markdown: string): NotionBlock[] {
+  const blocks: NotionBlock[] = [];
+
+  for (const rawLine of markdown.split("\n")) {
+    const line = rawLine.trimEnd();
+    if (line.trim() === "") continue;
+
+    if (line.startsWith("### ")) {
+      blocks.push({
+        object: "block",
+        type: "heading_3",
+        heading_3: { rich_text: [{ type: "text", text: { content: line.slice(4).trim() } }] },
+      });
+      continue;
+    }
+
+    if (line.startsWith("## ")) {
+      blocks.push({
+        object: "block",
+        type: "heading_2",
+        heading_2: { rich_text: [{ type: "text", text: { content: line.slice(3).trim() } }] },
+      });
+      continue;
+    }
+
+    if (line.startsWith("- ") || line.startsWith("* ")) {
+      const content = line.slice(2).trim();
+      const chunks = chunkText(content);
+      for (const chunk of chunks) {
+        blocks.push({
+          object: "block",
+          type: "bulleted_list_item",
+          bulleted_list_item: { rich_text: [{ type: "text", text: { content: chunk } }] },
+        });
+      }
+      continue;
+    }
+
+    const labelMatch = line.match(LABEL_LINE);
+    if (labelMatch) {
+      blocks.push(...labelParagraphBlocks(labelMatch[1], labelMatch[2]));
+      continue;
+    }
+
+    blocks.push(...paragraphBlocks(line));
+  }
+
+  return blocks;
+}
+
 export function buildPageProperties(data: {
   title: string;
   sourceUrl: string;
@@ -43,16 +132,12 @@ export async function createNotionPage(
   client: Client,
   databaseId: string,
   properties: Record<string, unknown>,
-  bodyParagraphs: string[]
+  children: object[]
 ): Promise<string> {
   const response = await client.pages.create({
     parent: { database_id: databaseId },
     properties: properties as CreatePageParameters["properties"],
-    children: bodyParagraphs.map((text) => ({
-      object: "block" as const,
-      type: "paragraph" as const,
-      paragraph: { rich_text: [{ type: "text" as const, text: { content: text } }] },
-    })),
+    children: children as CreatePageParameters["children"],
   });
   return response.id;
 }
