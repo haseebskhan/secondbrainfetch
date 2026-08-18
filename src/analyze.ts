@@ -16,16 +16,18 @@ export async function analyzeContent(
   }));
 
   const prompt = [
-    `You are cataloging a saved Instagram reel/post for a personal knowledge base.`,
+    `You are cataloging a saved Instagram reel/post for a personal knowledge base. The person saving this wants to reference and reuse the ideas in it later without rewatching the video.`,
     `Transcript: ${input.transcript ?? "(no audio / not available)"}`,
     `Pick "category" from exactly this list: ${CATEGORIES.join(", ")}.`,
     `Respond with ONLY a JSON object: { "title": string, "summary": string, "category": string, "tags": string[] }.`,
-    `"title" is a short descriptive title. "summary" is 1-2 sentences. "tags" is 2-5 free-form lowercase keywords.`,
+    `"title" is a short descriptive title.`,
+    `"summary" is a detailed, essay-style writeup (several paragraphs, not a couple of sentences) that captures the substance of the content: the specific ideas, steps, arguments, tips, or claims made, in enough depth that the reader can actually use them without watching the original. Write it as standalone reference notes, not a teaser. Do not pad it with filler — every paragraph should carry real content from the source.`,
+    `"tags" is 2-5 free-form lowercase keywords.`,
   ].join("\n");
 
   const response = await opts.anthropic.messages.create({
     model: "claude-opus-4-5",
-    max_tokens: 1024,
+    max_tokens: 4096,
     messages: [
       {
         role: "user",

@@ -15,34 +15,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const secret = req.headers["x-webhook-secret"];
   const secretValue = Array.isArray(secret) ? secret[0] : secret;
-  const expected = process.env.WEBHOOK_SECRET ?? "";
-  console.log(
-    "DEBUG webhook secret check:",
-    JSON.stringify({
-      receivedLength: secretValue?.length ?? null,
-      receivedPrefix: secretValue?.slice(0, 6) ?? null,
-      receivedSuffix: secretValue?.slice(-6) ?? null,
-      expectedLength: expected.length,
-      expectedPrefix: expected.slice(0, 6),
-      expectedSuffix: expected.slice(-6),
-      allHeaderKeys: Object.keys(req.headers),
-    })
-  );
-  if (!isValidWebhookSecret(secretValue, expected)) {
+  if (!isValidWebhookSecret(secretValue, process.env.WEBHOOK_SECRET ?? "")) {
     res.status(401).json({ error: "Invalid webhook secret" });
     return;
   }
 
   const url = (req.body as { url?: string } | undefined)?.url;
-  console.log(
-    "DEBUG url check:",
-    JSON.stringify({
-      rawBody: req.body,
-      bodyType: typeof req.body,
-      urlValue: url,
-      urlType: typeof url,
-    })
-  );
   if (!url || typeof url !== "string") {
     res.status(400).json({ error: "Missing or invalid 'url' field" });
     return;
@@ -56,7 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
   if (parsedUrl.hostname !== "instagram.com" && !parsedUrl.hostname.endsWith(".instagram.com")) {
-    res.status(400).json({ error: "Missing or invalid 'url' field", hostname: parsedUrl.hostname });
+    res.status(400).json({ error: "Missing or invalid 'url' field" });
     return;
   }
 
