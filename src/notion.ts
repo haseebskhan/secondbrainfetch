@@ -2,6 +2,26 @@ import type { Client } from "@notionhq/client";
 import type { CreatePageParameters } from "@notionhq/client/build/src/api-endpoints.js";
 import type { Category, PipelineStatus } from "./types.js";
 
+/**
+ * Notion's rich_text content field caps at 2000 characters per block. Splits
+ * `text` into chunks no longer than `maxLen`, breaking on the nearest
+ * preceding whitespace when possible (hard-splitting otherwise).
+ */
+export function chunkText(text: string, maxLen = 1900): string[] {
+  if (text.length <= maxLen) return [text];
+
+  const chunks: string[] = [];
+  let remaining = text;
+  while (remaining.length > maxLen) {
+    let splitAt = remaining.lastIndexOf(" ", maxLen);
+    if (splitAt <= 0) splitAt = maxLen;
+    chunks.push(remaining.slice(0, splitAt));
+    remaining = remaining.slice(splitAt).trimStart();
+  }
+  if (remaining.length > 0) chunks.push(remaining);
+  return chunks;
+}
+
 export function buildPageProperties(data: {
   title: string;
   sourceUrl: string;
