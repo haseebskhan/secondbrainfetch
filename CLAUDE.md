@@ -7,6 +7,27 @@ via an iOS Shortcut in the share sheet; runs on Vercel.
 Full pipeline walkthrough: [docs/architecture.md](docs/architecture.md)
 Deployment / Shortcut setup: [docs/SETUP.md](docs/SETUP.md)
 
+## Keep documentation in sync
+
+There are two documentation surfaces for this project, and both must be
+updated whenever a **structural change** lands — a new pipeline step, a
+changed file responsibility, a new/changed Notion property, a new category,
+a changed deployment requirement, or anything else that would make the
+existing docs describe the system incorrectly:
+
+1. **This repo** — `CLAUDE.md` (this file) and `docs/architecture.md`. The
+   technical reference, read by Claude Code at the start of every session
+   here.
+2. **Notion** — the "[Second Brain — How It Works](https://app.notion.com/p/3c13df2301d981dc8158fd95261db3ea)"
+   page, nested under My Life OS next to the Second Brain database. The
+   plain-language version for the human owner, including a change log at
+   the bottom — append a dated entry there for any structural change,
+   newest first.
+
+A change that's small and cosmetic (copy tweaks, a comment, a test-only
+refactor) doesn't need either doc touched. When in doubt, if the change
+would surprise someone reading the current docs, update both.
+
 ## Quick orientation
 
 - **Entry point:** [api/ingest.ts](api/ingest.ts) — the only HTTP endpoint.
