@@ -414,6 +414,32 @@ describe("runPipeline", () => {
     expect(result.status).toBe("Done");
   });
 
+  it("skips frame extraction and vision when the transcript is already substantial", async () => {
+    const substantialTranscript = "word ".repeat(60).trim(); // 60 words, over the 50-word threshold
+    const deps = baseDeps({
+      extractAndTranscribe: vi.fn().mockResolvedValue(substantialTranscript),
+    });
+
+    await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
+
+    expect(deps.extractFrames).not.toHaveBeenCalled();
+    expect(deps.analyzeContent).toHaveBeenCalledWith(
+      { transcript: substantialTranscript, frames: [], caption: "A quick weeknight pasta recipe." },
+      { anthropic: deps.anthropic }
+    );
+  });
+
+  it("still extracts frames when the transcript is short (below the vision-skip threshold)", async () => {
+    const shortTranscript = "word ".repeat(10).trim(); // 10 words, under the 50-word threshold
+    const deps = baseDeps({
+      extractAndTranscribe: vi.fn().mockResolvedValue(shortTranscript),
+    });
+
+    await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
+
+    expect(deps.extractFrames).toHaveBeenCalled();
+  });
+
   it("chunks a long transcript into multiple paragraphs inside the toggle, each under Notion's 2000-char limit", async () => {
     const longTranscript = "word ".repeat(500); // ~2500 chars
     const deps = baseDeps({

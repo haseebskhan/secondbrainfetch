@@ -27,6 +27,17 @@ import { getCategoryIconUrl } from "./categories.js";
 
 const TITLE_MAX_LEN = 200;
 
+// Frame extraction + Claude vision are only needed when the transcript
+// alone isn't enough to categorize/summarize the content (silent or
+// mostly-visual reels). A transcript at or above this word count is
+// treated as substantial enough on its own, skipping the extra ffmpeg
+// frame sampling and the vision tokens in the analyzeContent call.
+const MIN_TRANSCRIPT_WORDS_FOR_VISION_SKIP = 50;
+
+function wordCount(text: string | null): number {
+  return text ? text.trim().split(/\s+/).filter(Boolean).length : 0;
+}
+
 export interface PipelineDeps {
   downloadMedia?: typeof downloadMediaFn;
   fetchMetadata?: typeof fetchMetadataFn;
@@ -204,13 +215,19 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
             console.error("Transcription failed:", transcribeErr);
           }
 
-          try {
-            frames = await extractFrames(media.filePath, {
-              ffmpegPath,
-              outDir: invocationDir,
-            });
-          } catch (framesErr) {
-            console.error("Frame extraction failed:", framesErr);
+          // A substantial transcript already gives Claude everything it
+          // needs to categorize/summarize — skip the ffmpeg frame sampling
+          // and its Claude vision cost unless the transcript is missing or
+          // too thin (e.g. a mostly-silent or mostly-visual reel).
+          if (wordCount(transcript) < MIN_TRANSCRIPT_WORDS_FOR_VISION_SKIP) {
+            try {
+              frames = await extractFrames(media.filePath, {
+                ffmpegPath,
+                outDir: invocationDir,
+              });
+            } catch (framesErr) {
+              console.error("Frame extraction failed:", framesErr);
+            }
           }
         } else {
           // Image posts have no audio/video to run ffmpeg against — read
