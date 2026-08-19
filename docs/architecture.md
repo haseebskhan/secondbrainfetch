@@ -65,17 +65,25 @@ material, not just what's visible in the caption. Non-fatal on failure.
 
 ### 5–6. Transcription + frame sampling
 
-Independent of each other — a Whisper failure shouldn't prevent frame
-extraction, and vice versa:
-
 - **Transcription** (`src/transcribe.ts`): extracts audio via ffmpeg, then
   POSTs it directly to OpenAI's `/v1/audio/translations` endpoint using raw
   `fetch` (not the OpenAI SDK — see Gotchas in `CLAUDE.md`). Using
   `/translations` rather than `/transcriptions` means output is **always
   English**, regardless of the spoken language.
 - **Frames** (`src/vision.ts`): samples several frames from the video via
-  ffmpeg for Claude's vision analysis. For image posts (no video), the
-  downloaded image itself is used directly.
+  ffmpeg for Claude's vision analysis in step 6. For image posts (no
+  video), the downloaded image itself is used directly instead.
+
+**Frame extraction is conditional, to avoid unnecessary Claude vision
+cost.** Most reels convey everything needed for title/category/tags
+through audio alone. `runPipeline()` only calls `extractFrames()` when the
+transcript is missing or under `MIN_TRANSCRIPT_WORDS_FOR_VISION_SKIP` (50
+words) — a silent or mostly-visual reel. A substantial transcript skips
+frame sampling entirely, and `analyzeContent()` runs on transcript + caption
+only, with an empty `frames` array. Image posts always get their single
+image analyzed, since there's no transcript to fall back on. See
+`wordCount()` and the threshold constant near the top of `src/pipeline.ts`
+if this needs tuning.
 
 ### 7. Content analysis (`src/analyze.ts`)
 
