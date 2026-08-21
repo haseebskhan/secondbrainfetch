@@ -85,7 +85,8 @@ Run both before considering any change done — see
 | Extracting a linked external site from the caption + fetching its text | `src/webfetch.ts` |
 | "Mentioned tools/resources" extraction | `src/keyItems.ts` |
 | Duplicate source-URL detection | `src/duplicates.ts` |
-| Related-notes cross-linking (category + tag overlap) | `src/relatedNotes.ts` |
+| Related-notes cross-linking (category + tag overlap, plus semantic) | `src/relatedNotes.ts` |
+| Title/summary embeddings for semantic related-notes matching | `src/embeddings.ts` |
 | Notion block/property builders + page creation | `src/notion.ts` |
 | Shared types (`PipelineResult`, `AnalysisResult`, `Category`, ...) | `src/types.ts` |
 
@@ -114,3 +115,7 @@ committed anywhere:
   env var must fall back to the bundled binary path.
 - **Claude JSON responses get fence-stripped** (` ```json ` wrapping) before
   `JSON.parse` in every module that asks Claude for structured output.
+- **Pages saved before semantic linking shipped have no `Embedding`
+  property**, so they're invisible to `findSemanticMatches` until backfilled.
+  Run `scripts/backfill-embeddings.ts` once (see its header comment) to fill
+  them in.

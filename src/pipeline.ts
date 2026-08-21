@@ -22,7 +22,8 @@ import { buildContentNotes as buildContentNotesFn } from "./contentTemplates.js"
 import { extractExternalUrl as extractExternalUrlFn, fetchWebpageText as fetchWebpageTextFn } from "./webfetch.js";
 import { extractKeyItems as extractKeyItemsFn } from "./keyItems.js";
 import { findExistingPageBySourceUrl as findExistingPageBySourceUrlFn } from "./duplicates.js";
-import { findRelatedNotes as findRelatedNotesFn } from "./relatedNotes.js";
+import { findRelatedNotes as findRelatedNotesFn, findSemanticMatches as findSemanticMatchesFn, mergeRelatedNotes } from "./relatedNotes.js";
+import { generateEmbedding as generateEmbeddingFn, encodeEmbedding } from "./embeddings.js";
 import { getCategoryIconUrl } from "./categories.js";
 
 const TITLE_MAX_LEN = 200;
@@ -50,6 +51,8 @@ export interface PipelineDeps {
   extractKeyItems?: typeof extractKeyItemsFn;
   findExistingPageBySourceUrl?: typeof findExistingPageBySourceUrlFn;
   findRelatedNotes?: typeof findRelatedNotesFn;
+  generateEmbedding?: typeof generateEmbeddingFn;
+  findSemanticMatches?: typeof findSemanticMatchesFn;
   createNotionPage?: typeof createNotionPage;
   notionClient: Client;
   notionDatabaseId: string;
@@ -136,6 +139,8 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
   const extractKeyItems = deps.extractKeyItems ?? extractKeyItemsFn;
   const findExistingPageBySourceUrl = deps.findExistingPageBySourceUrl ?? findExistingPageBySourceUrlFn;
   const findRelatedNotes = deps.findRelatedNotes ?? findRelatedNotesFn;
+  const generateEmbedding = deps.generateEmbedding ?? generateEmbeddingFn;
+  const findSemanticMatches = deps.findSemanticMatches ?? findSemanticMatchesFn;
   const writeNotionPage = deps.createNotionPage ?? createNotionPage;
 
   // Skip the whole pipeline (no download, no API spend, no Notion write)
@@ -275,6 +280,25 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
           console.error("Related notes lookup failed:", relatedErr);
         }
 
+        // Semantic matching catches idea-level connections tag/category
+        // overlap misses entirely (different topic, same underlying point).
+        // Independent of the tag-based lookup above: a failure here still
+        // leaves the tag-based Related Notes intact and just skips storing
+        // an embedding on this page.
+        let embedding: string | undefined;
+        try {
+          const vector = await generateEmbedding(`${analysis.title}\n${analysis.summary}`, {
+            openaiApiKey: deps.openaiApiKey,
+          });
+          embedding = encodeEmbedding(vector);
+          const semanticMatches = await findSemanticMatches(deps.notionClient, deps.notionDatabaseId, {
+            embedding: vector,
+          });
+          relatedNotes = mergeRelatedNotes(relatedNotes, semanticMatches);
+        } catch (embeddingErr) {
+          console.error("Semantic related notes lookup failed:", embeddingErr);
+        }
+
         result = {
           status: "Done",
           sourceUrl,
@@ -290,6 +314,7 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
           category: analysis.category,
           tags: analysis.tags,
           transcript,
+          embedding,
         };
       } catch (analysisErr) {
         const message = analysisErr instanceof Error ? analysisErr.message : String(analysisErr);
@@ -321,6 +346,7 @@ export async function runPipeline(sourceUrl: string, deps: PipelineDeps): Promis
       creator: result.uploader,
       externalSourceUrl: result.externalSourceUrl,
       relatedPageIds: result.relatedNotes?.map((n) => n.id),
+      embedding: result.embedding,
     });
 
     const children = buildPageBlocks(result);

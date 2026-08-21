@@ -20,10 +20,11 @@ src/pipeline.ts  runPipeline()
       ├─ 7. category-specific content notes (src/contentTemplates.ts / zettelkasten.ts)
       ├─ 8. extract mentioned tools/resources (src/keyItems.ts)
       ├─ 9. find related notes by category+tag overlap (src/relatedNotes.ts)
-      └─ 10. write the Notion page (src/notion.ts)         — with degraded-payload retry on failure
+      ├─ 10. embed title+summary, find semantic matches (src/embeddings.ts, src/relatedNotes.ts) — merged into (9)'s results
+      └─ 11. write the Notion page (src/notion.ts)         — with degraded-payload retry on failure
 ```
 
-Every step from 3–9 is wrapped in its own try/catch inside `runPipeline()`.
+Every step from 3–10 is wrapped in its own try/catch inside `runPipeline()`.
 None of them can block the others, and a failure anywhere still results in
 *some* page being written — worst case, one with just the source URL and an
 error note. See the "Never lose a save" principle below.
@@ -108,12 +109,29 @@ This is where the page gets its substance, dispatched by category:
 Pulls out any tools, apps, products, or resources explicitly mentioned, for
 a "Mentioned Tools & Resources" section.
 
-### 10. Related notes (`src/relatedNotes.ts`)
+### 10. Related notes — tag-based and semantic (`src/relatedNotes.ts`, `src/embeddings.ts`)
 
-Looks for existing pages sharing category and/or tags, and returns them as
-`{id, title, url}`. These become both a real Notion **relation** property
+Two independent sources feed the same `Related Notes` list:
+
+- **Tag-based** (`findRelatedNotes`): existing pages sharing category and/or
+  tags, ranked by tag overlap. Catches the "obvious" connections.
+- **Semantic** (`findSemanticMatches`): `src/embeddings.ts` requests a
+  256-dimension OpenAI embedding (`text-embedding-3-small`) for the new
+  page's title+summary, then compares it by cosine similarity against every
+  existing page's stored embedding, regardless of category or tags. Catches
+  connections tag overlap can't — two pages from completely different
+  categories making the same underlying point.
+
+`mergeRelatedNotes` combines both (tag matches first, semantic matches
+filling remaining slots, deduped by page id) into one list of
+`{id, title, url}`, which becomes both a real Notion **relation** property
 (`Related Notes`, with `Referenced By` as the reverse side) and a visible
-"Related Notes" section at the bottom of the page.
+"Related Notes" section at the bottom of the page. The new page's own
+embedding is stored on it (`Embedding` property, JSON-encoded) so it's
+available for *future* pages' semantic matching. A failure in the embedding
+step doesn't block the write or the tag-based matches — the page is just
+saved without its own embedding, and gets one on the next backfill run
+(`scripts/backfill-embeddings.ts`).
 
 ### 11. Notion write (`src/notion.ts`)
 
@@ -146,6 +164,8 @@ Database: "Second Brain — Saved Reels". Properties:
 - `External Source` (url, optional) — a linked blog/site found in the caption
 - `Related Notes` (relation, self-referencing) / `Referenced By` (its
   reverse relation)
+- `Embedding` (rich text, optional) — JSON-encoded 256-dim vector used only
+  for semantic related-notes matching; not meant to be read by a human
 
 ## Testing
 

@@ -213,6 +213,7 @@ export function buildPageProperties(data: {
   creator?: string;
   externalSourceUrl?: string;
   relatedPageIds?: string[];
+  embedding?: string;
 }): Record<string, unknown> {
   const properties: Record<string, unknown> = {
     Title: { title: [{ text: { content: data.title } }] },
@@ -229,6 +230,9 @@ export function buildPageProperties(data: {
   }
   if (data.relatedPageIds && data.relatedPageIds.length > 0) {
     properties["Related Notes"] = { relation: data.relatedPageIds.map((id) => ({ id })) };
+  }
+  if (data.embedding) {
+    properties.Embedding = { rich_text: [{ text: { content: data.embedding } }] };
   }
   return properties;
 }

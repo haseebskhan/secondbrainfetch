@@ -57,6 +57,29 @@ describe("buildPageProperties", () => {
     expect(props["Related Notes"]).toEqual({ relation: [{ id: "page-a" }, { id: "page-b" }] });
   });
 
+  it("includes the Embedding property when an encoded embedding is provided", () => {
+    const props = buildPageProperties({
+      title: "3-Ingredient Pasta",
+      sourceUrl: "https://www.instagram.com/reel/abc123/",
+      category: "Recipes/Food",
+      tags: [],
+      embedding: "[0.1,0.2]",
+    });
+
+    expect(props.Embedding).toEqual({ rich_text: [{ text: { content: "[0.1,0.2]" } }] });
+  });
+
+  it("omits the Embedding property when not provided", () => {
+    const props = buildPageProperties({
+      title: "3-Ingredient Pasta",
+      sourceUrl: "https://www.instagram.com/reel/abc123/",
+      category: "Recipes/Food",
+      tags: [],
+    });
+
+    expect(props.Embedding).toBeUndefined();
+  });
+
   it("omits the Related Notes relation property when there are no related pages", () => {
     const props = buildPageProperties({
       title: "3-Ingredient Pasta",

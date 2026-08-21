@@ -57,5 +57,6 @@ export interface PipelineResult {
   category?: Category;
   tags?: string[];
   transcript?: string | null;
+  embedding?: string;
   errorMessage?: string;
 }

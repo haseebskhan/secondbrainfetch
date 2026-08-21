@@ -40,6 +40,8 @@ function baseDeps(overrides: Partial<Record<string, any>> = {}) {
     extractKeyItems: vi.fn().mockResolvedValue([]),
     findExistingPageBySourceUrl: vi.fn().mockResolvedValue(false),
     findRelatedNotes: vi.fn().mockResolvedValue([]),
+    generateEmbedding: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
+    findSemanticMatches: vi.fn().mockResolvedValue([]),
     createNotionPage: vi.fn().mockResolvedValue("page-1"),
     notionClient: {} as any,
     notionDatabaseId: "db-1",
@@ -336,6 +338,42 @@ describe("runPipeline", () => {
       category: "Recipes/Food",
       tags: ["pasta"],
     });
+  });
+
+  it("merges semantic matches into Related Notes and stores the embedding on the page", async () => {
+    const deps = baseDeps({
+      generateEmbedding: vi.fn().mockResolvedValue([0.5, 0.5]),
+      findSemanticMatches: vi
+        .fn()
+        .mockResolvedValue([{ id: "page-semantic", title: "A Different-Topic Idea", url: "https://notion.so/semantic" }]),
+    });
+
+    await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
+
+    const properties = deps.createNotionPage.mock.calls[0][2];
+    expect(properties["Related Notes"]).toEqual({
+      relation: [{ id: "page-semantic" }],
+    });
+    expect(properties.Embedding.rich_text[0].text.content).toBe("[0.5,0.5]");
+    expect(deps.findSemanticMatches).toHaveBeenCalledWith(deps.notionClient, deps.notionDatabaseId, {
+      embedding: [0.5, 0.5],
+    });
+  });
+
+  it("still writes the page and tag-based related notes when the embedding step fails", async () => {
+    const deps = baseDeps({
+      generateEmbedding: vi.fn().mockRejectedValue(new Error("embeddings API down")),
+      findRelatedNotes: vi
+        .fn()
+        .mockResolvedValue([{ id: "page-earlier", title: "Earlier Pasta Reel", url: "https://notion.so/earlier" }]),
+    });
+
+    const result = await runPipeline("https://www.instagram.com/reel/abc/", deps as any);
+
+    expect(result.status).toBe("Done");
+    const properties = deps.createNotionPage.mock.calls[0][2];
+    expect(properties["Related Notes"]).toEqual({ relation: [{ id: "page-earlier" }] });
+    expect(properties.Embedding).toBeUndefined();
   });
 
   it("skips ffmpeg-based transcription/frame extraction and reads the image directly for image posts", async () => {
