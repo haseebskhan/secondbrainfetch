@@ -1,11 +1,28 @@
 import type { Client } from "@notionhq/client";
-import { cosineSimilarity, decodeEmbedding, generateEmbedding as generateEmbeddingFn } from "./embeddings.js";
+import {
+  cosineSimilarity,
+  decodeEmbedding,
+  encodeEmbedding,
+  generateEmbedding as generateEmbeddingFn,
+} from "./embeddings.js";
 
 export interface SearchResult {
   title: string;
   url: string;
   category: string;
   similarity: number;
+}
+
+export interface SearchResponse {
+  results: SearchResult[];
+  /**
+   * The query's own embedding, pre-encoded (encodeEmbedding) and ready to
+   * write directly onto a new page's Embedding property — lets a caller
+   * that's about to create a page (e.g. the secondbrain skill capturing a
+   * chat-born idea) get both "what's related to this" and "the value to
+   * store" from a single call, without a second embeddings round trip.
+   */
+  queryEmbedding: string;
 }
 
 /**
@@ -26,7 +43,7 @@ export async function searchArchiveByMeaning(
     minSimilarity?: number;
     generateEmbedding?: typeof generateEmbeddingFn;
   }
-): Promise<SearchResult[]> {
+): Promise<SearchResponse> {
   const limit = opts.limit ?? 5;
   const minSimilarity = opts.minSimilarity ?? 0.3;
   const embed = opts.generateEmbedding ?? generateEmbeddingFn;
@@ -39,7 +56,7 @@ export async function searchArchiveByMeaning(
     page_size: 100,
   });
 
-  return response.results
+  const results = response.results
     .map((page: any) => {
       const embeddingText = page.properties?.Embedding?.rich_text?.[0]?.plain_text;
       const pageEmbedding = decodeEmbedding(embeddingText);
@@ -55,4 +72,6 @@ export async function searchArchiveByMeaning(
     .filter((entry) => entry.similarity >= minSimilarity)
     .sort((a, b) => b.similarity - a.similarity)
     .slice(0, limit);
+
+  return { results, queryEmbedding: encodeEmbedding(queryVector) };
 }

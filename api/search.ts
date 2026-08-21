@@ -26,10 +26,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const notionClient = new Client({ auth: process.env.NOTION_TOKEN });
-    const results = await searchArchiveByMeaning(notionClient, process.env.NOTION_DATABASE_ID ?? "", query, {
-      openaiApiKey: process.env.OPENAI_API_KEY ?? "",
-    });
-    res.status(200).json({ results });
+    const { results, queryEmbedding } = await searchArchiveByMeaning(
+      notionClient,
+      process.env.NOTION_DATABASE_ID ?? "",
+      query,
+      { openaiApiKey: process.env.OPENAI_API_KEY ?? "" }
+    );
+    res.status(200).json({ results, queryEmbedding });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("Semantic search failed:", message);

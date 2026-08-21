@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { searchArchiveByMeaning } from "../src/search.js";
-import { encodeEmbedding } from "../src/embeddings.js";
+import { encodeEmbedding, decodeEmbedding } from "../src/embeddings.js";
 
 function page(url: string, title: string, category: string, embedding: number[]) {
   return {
@@ -24,16 +24,18 @@ describe("searchArchiveByMeaning", () => {
     });
     const fakeClient = { databases: { query } } as any;
 
-    const results = await searchArchiveByMeaning(fakeClient, "db-1", "should I keep waiting on this?", {
-      openaiApiKey: "sk-test",
-      generateEmbedding,
-      minSimilarity: 0.3,
-    });
+    const { results, queryEmbedding } = await searchArchiveByMeaning(
+      fakeClient,
+      "db-1",
+      "should I keep waiting on this?",
+      { openaiApiKey: "sk-test", generateEmbedding, minSimilarity: 0.3 }
+    );
 
     expect(generateEmbedding).toHaveBeenCalledWith("should I keep waiting on this?", { openaiApiKey: "sk-test" });
     expect(results).toEqual([
       { title: "Close match", url: "https://notion.so/b", category: "Quotes/Inspiration", similarity: expect.any(Number) },
     ]);
+    expect(decodeEmbedding(queryEmbedding)).toEqual([1, 0]);
   });
 
   it("respects the limit option", async () => {
@@ -47,7 +49,7 @@ describe("searchArchiveByMeaning", () => {
     });
     const fakeClient = { databases: { query } } as any;
 
-    const results = await searchArchiveByMeaning(fakeClient, "db-1", "anything", {
+    const { results } = await searchArchiveByMeaning(fakeClient, "db-1", "anything", {
       openaiApiKey: "sk-test",
       generateEmbedding,
       limit: 2,
@@ -63,7 +65,7 @@ describe("searchArchiveByMeaning", () => {
     });
     const fakeClient = { databases: { query } } as any;
 
-    const results = await searchArchiveByMeaning(fakeClient, "db-1", "anything", {
+    const { results } = await searchArchiveByMeaning(fakeClient, "db-1", "anything", {
       openaiApiKey: "sk-test",
       generateEmbedding,
     });

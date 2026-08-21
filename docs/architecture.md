@@ -49,8 +49,15 @@ src/search.ts  searchArchiveByMeaning()
       │      used at save time)
       ├─ 2. fetch every page with a non-empty Embedding property
       └─ 3. rank by cosine similarity, return top matches (title, url,
-             category, similarity) as JSON
+             category, similarity) plus the query's own encoded embedding
+             as JSON
 ```
+
+The query's own embedding is returned (`queryEmbedding`) alongside the
+ranked matches so a caller that's about to *create* a page — e.g. the
+secondbrain skill capturing a chat-born idea, not from the reel pipeline —
+can get both "what's related to this" and "the value to store as this new
+page's own `Embedding` property" from a single call.
 
 Unlike `api/ingest.ts`'s fire-and-forget `waitUntil` pattern, this is a
 synchronous request/response endpoint — the caller needs real results back,
