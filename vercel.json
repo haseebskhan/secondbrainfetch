@@ -3,6 +3,9 @@
     "api/ingest.ts": {
       "maxDuration": 300,
       "includeFiles": "bin/**"
+    },
+    "api/search.ts": {
+      "maxDuration": 30
     }
   }
 }

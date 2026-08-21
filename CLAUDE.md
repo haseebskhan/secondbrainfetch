@@ -30,10 +30,12 @@ would surprise someone reading the current docs, update both.
 
 ## Quick orientation
 
-- **Entry point:** [api/ingest.ts](api/ingest.ts) — the only HTTP endpoint.
+- **Entry points:** [api/ingest.ts](api/ingest.ts) — the write-side webhook.
   Validates the webhook secret and URL host, then fires `runPipeline` via
   `waitUntil` (Vercel Fluid Compute) and returns `202` immediately. The
   Shortcut never waits for the actual processing.
+  [api/search.ts](api/search.ts) — the read-side live semantic search
+  endpoint, described below.
 - **Orchestrator:** [src/pipeline.ts](src/pipeline.ts) — `runPipeline()`.
   Everything downstream of the webhook happens here. Read this file first
   when debugging or extending behavior.
@@ -87,6 +89,7 @@ Run both before considering any change done — see
 | Duplicate source-URL detection | `src/duplicates.ts` |
 | Related-notes cross-linking (category + tag overlap, plus semantic) | `src/relatedNotes.ts` |
 | Title/summary embeddings for semantic related-notes matching | `src/embeddings.ts` |
+| Live semantic search over the whole archive (arbitrary query → ranked pages) | `src/search.ts`, `api/search.ts` |
 | Notion block/property builders + page creation | `src/notion.ts` |
 | Shared types (`PipelineResult`, `AnalysisResult`, `Category`, ...) | `src/types.ts` |
 
@@ -95,8 +98,8 @@ Run both before considering any change done — see
 See `.env.example`. Set these in Vercel Project Settings, not locally
 committed anywhere:
 
-`WEBHOOK_SECRET`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `NOTION_TOKEN`,
-`NOTION_DATABASE_ID`, `YT_DLP_PATH`.
+`WEBHOOK_SECRET`, `SEARCH_SECRET`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`,
+`NOTION_TOKEN`, `NOTION_DATABASE_ID`, `YT_DLP_PATH`.
 
 ## Gotchas worth knowing before touching this
 
@@ -119,3 +122,9 @@ committed anywhere:
   property**, so they're invisible to `findSemanticMatches` until backfilled.
   Run `scripts/backfill-embeddings.ts` once (see its header comment) to fill
   them in.
+- **`api/search.ts` is a synchronous GET endpoint**, unlike `api/ingest.ts`'s
+  fire-and-forget `waitUntil` pattern — it has to return real results to the
+  caller, so errors are caught and returned as a 500, not just logged.
+  Protected by its own `SEARCH_SECRET` query param (`?key=...`), deliberately
+  separate from `WEBHOOK_SECRET` so a leaked read-only search key can't be
+  used to trigger writes.

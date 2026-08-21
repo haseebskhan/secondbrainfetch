@@ -29,6 +29,36 @@ None of them can block the others, and a failure anywhere still results in
 *some* page being written — worst case, one with just the source URL and an
 error note. See the "Never lose a save" principle below.
 
+## Read side: live semantic search (`api/search.ts`)
+
+Separate from the write pipeline above, `api/search.ts` answers an
+arbitrary question against the whole archive by *meaning*, not keywords —
+used by the "secondbrain" Claude skill to find saves that match what a
+question means even when it shares no words/tags with how the page was
+saved.
+
+```
+Claude (secondbrain skill)
+      │  GET /api/search?q=<question>&key=<SEARCH_SECRET>
+      ▼
+api/search.ts  ── validates ?key against SEARCH_SECRET, 401s otherwise
+      │
+      ▼
+src/search.ts  searchArchiveByMeaning()
+      ├─ 1. embed the query text (src/embeddings.ts, same OpenAI model
+      │      used at save time)
+      ├─ 2. fetch every page with a non-empty Embedding property
+      └─ 3. rank by cosine similarity, return top matches (title, url,
+             category, similarity) as JSON
+```
+
+Unlike `api/ingest.ts`'s fire-and-forget `waitUntil` pattern, this is a
+synchronous request/response endpoint — the caller needs real results back,
+so failures are caught and returned as a `500`, not just logged. It's
+protected by its own `SEARCH_SECRET` (separate from `WEBHOOK_SECRET`) since
+it's a different trust boundary — read-only search vs. triggering a full
+pipeline run — and a leaked search key shouldn't be able to write pages.
+
 ## Request lifecycle in detail
 
 ### 1. Webhook (`api/ingest.ts`)
